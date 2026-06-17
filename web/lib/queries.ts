@@ -40,3 +40,9 @@ export const useMe = () => useQuery({ queryKey: ['me'], queryFn: orcaClient.me }
 
 export const useActivity = (type?: string) =>
   useQuery({ queryKey: ['activity', type ?? 'all'], queryFn: () => orcaClient.activity(type ? { type } : undefined) });
+
+export const useProjects = () =>
+  useQuery({ queryKey: ['projects'], queryFn: orcaClient.projects });
+
+export const useProjectGit = (id: number | null) =>
+  useQuery({ queryKey: ['project-git', id], queryFn: () => orcaClient.projectGit(id as number), enabled: !!id });

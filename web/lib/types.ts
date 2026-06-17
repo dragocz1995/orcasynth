@@ -33,3 +33,8 @@ export interface MissionDetail {
 export interface User { id: number; username: string; created_at: string }
 export interface AuthResult { token: string; user: User }
 export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string }
+export interface Project { id: number; slug: string; path: string; notes: string }
+export interface GitStatus { branch: string; ahead: number; behind: number; dirty: number; clean: boolean }
+export interface GitBranch { name: string; current: boolean }
+export interface GitCommit { hash: string; subject: string; author: string; relative: string }
+export interface ProjectGit { isRepo: boolean; status: GitStatus | null; branches: GitBranch[]; commits: GitCommit[] }

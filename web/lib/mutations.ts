@@ -68,3 +68,7 @@ export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (id: number) => orcaClient.deleteUser(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }) });
 }
+export function useCreateProject() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (v: { slug: string; path: string; notes?: string }) => orcaClient.createProject(v), onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }) });
+}
