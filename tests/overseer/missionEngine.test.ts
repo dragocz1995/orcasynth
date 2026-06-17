@@ -14,8 +14,8 @@ function setup() {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
   const tasks = new TaskStore(db);
   tasks.create({ id: 'epic', project_id: 1, title: 'E', type: 'epic' });
-  tasks.create({ id: 't1', project_id: 1, title: 'one', parent_id: 'epic', labels: ['exec:ollama/deepseek-v4-flash'] });
-  tasks.create({ id: 't2', project_id: 1, title: 'two', parent_id: 'epic', labels: ['exec:ollama/deepseek-v4-flash'] });
+  tasks.create({ id: 't1', project_id: 1, title: 'one', parent_id: 'epic', labels: ['exec:ollama-cloud/deepseek-v4-flash'] });
+  tasks.create({ id: 't2', project_id: 1, title: 'two', parent_id: 'epic', labels: ['exec:ollama-cloud/deepseek-v4-flash'] });
   tasks.addDep('t2', 't1');
   const tmux = new FakeTmuxDriver();
   const bus = new EventBus();
@@ -40,6 +40,14 @@ describe('MissionEngine', () => {
     tasks.setStatus('t2', 'closed'); await tmux.kill('orca-AgentX');
     await engine.tick(m.id);
     expect(engine.isActive(m.id)).toBe(false); // auto-disengaged
+  });
+
+  it('does not count unrelated global orca- sessions against max_sessions', async () => {
+    const { tmux, engine } = setup();
+    await tmux.spawn('orca-OtherProject', { cwd: '/x', command: 'sleep 1' }); // foreign session
+    const m = await engine.engage({ epicId: 'epic', autonomy: 'L3', maxSessions: 1, clearedGuardrails: [] });
+    expect(engine.isActive(m.id)).toBe(true);
+    expect(await tmux.list()).toContain('orca-AgentX'); // head still spawned despite the foreign session
   });
 
   it('engage() publishes mission active event', async () => {

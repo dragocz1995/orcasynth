@@ -1,0 +1,34 @@
+'use client';
+import { type ReactNode, useState } from 'react';
+import { HelpCircle } from 'lucide-react';
+
+/** A small "?" that reveals a custom tooltip on hover/focus. For inline field help. */
+export function HelpTip({ children, align = 'right' }: { children: ReactNode; align?: 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-label="Help"
+        onFocus={() => setOpen(true)}
+        onBlur={() => setOpen(false)}
+        className="inline-flex h-4 w-4 items-center justify-center text-text-muted transition-colors hover:text-text"
+      >
+        <HelpCircle size={14} aria-hidden />
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className={`absolute top-6 z-50 w-64 rounded-md border border-border bg-surface p-3 text-xs leading-relaxed text-text-muted ${align === 'right' ? 'right-0' : 'left-0'}`}
+          style={{ boxShadow: 'var(--shadow-raised)' }}
+        >
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}

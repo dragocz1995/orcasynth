@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { buildAgentCommand } from '../../src/spawn/commandBuilder.js';
 
 describe('buildAgentCommand', () => {
-  it('routes a provider/model to opencode with --prompt', () => {
-    const cmd = buildAgentCommand({ program: 'opencode', model: 'ollama/deepseek-v4-flash' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
-    expect(cmd).toContain('opencode');
-    expect(cmd).toContain('--model ollama/deepseek-v4-flash');
-    expect(cmd).toContain('--prompt');
+  it('routes a provider/model to headless `opencode run`', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'ollama-cloud/deepseek-v4-flash' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+    expect(cmd).toContain('opencode run');
+    expect(cmd).toContain('--model ollama-cloud/deepseek-v4-flash');
+    expect(cmd).not.toContain('--prompt'); // headless run, not the interactive TUI
   });
   it('routes a bare model to claude', () => {
     const cmd = buildAgentCommand({ program: 'claude-code', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
@@ -17,5 +17,22 @@ describe('buildAgentCommand', () => {
     expect(cmd).toContain('codex');
     expect(cmd).toContain('--model gpt-5.4');
     expect(cmd).toContain('--dangerously-bypass-approvals-and-sandbox');
+  });
+  it('embeds the close command in the prompt and exports the provided env', () => {
+    const cmd = buildAgentCommand(
+      { program: 'opencode', model: 'm' },
+      { projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', closeCommand: 'node /x/cli.js close orca-1', env: { ORCA_URL: 'http://localhost:4400', ORCA_TOKEN: 'tok' } },
+    );
+    expect(cmd).toContain('export ORCA_URL=');
+    expect(cmd).toContain('export ORCA_TOKEN=');
+    expect(cmd).toContain('node /x/cli.js close orca-1');
+  });
+  it('defaults the close command to `orca close <id>` when none is given', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-9', agentName: 'A' });
+    expect(cmd).toContain('orca close orca-9');
+  });
+  it('uses the configured provider binary and extra args', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', bin: '/opt/oc/opencode', extraArgs: '--pure' });
+    expect(cmd).toContain('/opt/oc/opencode run --model m --pure ');
   });
 });

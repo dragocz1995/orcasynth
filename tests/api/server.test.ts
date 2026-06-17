@@ -12,6 +12,7 @@ import { SpawnService } from '../../src/spawn/spawn.js';
 import { MissionEngine } from '../../src/overseer/missionEngine.js';
 import { FakeClock } from '../../src/shared/clock.js';
 import { ConfigStore } from '../../src/store/configStore.js';
+import { FakeInference } from '../../src/inference/client.js';
 
 function makeApp() {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
@@ -91,7 +92,7 @@ it('POST /sessions launches an agent on a task and marks it in_progress', async 
     engine: null as any, spawn: new SpawnService({ tmux, agents: new AgentStore(db) }), tmux,
     project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config: new ConfigStore(db),
   });
-  const res = await app.request('/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskId: 'orca-1', exec: 'ollama/deepseek-v4-flash' }) });
+  const res = await app.request('/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskId: 'orca-1', exec: 'ollama-cloud/deepseek-v4-flash' }) });
   expect(res.status).toBe(201);
   const body = await res.json();
   expect(body.session).toMatch(/^orca-/);
@@ -233,4 +234,102 @@ it('PATCH /tasks/:id sets the exec label', async () => {
   const res = await app.request('/tasks/orca-e', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ exec: 'sonnet' }) });
   expect(res.status).toBe(200);
   expect((await res.json()).labels).toContain('exec:sonnet');
+});
+
+it('PATCH /tasks/:id updates title, type and priority', async () => {
+  const { app } = makeApp();
+  await app.request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'orca-u', project_id: 1, title: 'Old' }) });
+  const res = await app.request('/tasks/orca-u', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'New', type: 'bug', priority: 'P0' }) });
+  expect(res.status).toBe(200);
+  const t = await res.json();
+  expect(t.title).toBe('New'); expect(t.type).toBe('bug'); expect(t.priority).toBe('P0');
+});
+
+it('DELETE /tasks/:id removes the task and publishes a cancelled event', async () => {
+  const { app, bus } = makeApp();
+  const events: OrcaEvent[] = []; bus.subscribe(e => events.push(e));
+  await app.request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'orca-d', project_id: 1, title: 'Doomed' }) });
+  const res = await app.request('/tasks/orca-d', { method: 'DELETE' });
+  expect(res.status).toBe(200);
+  const list = await (await app.request('/tasks')).json() as Array<{ id: string }>;
+  expect(list.some(t => t.id === 'orca-d')).toBe(false);
+  expect(events.some(e => e.type === 'task' && e.taskId === 'orca-d' && e.status === 'cancelled')).toBe(true);
+});
+
+it('POST /tasks/plan without an autopilot key returns 400', async () => {
+  const { app } = makeApp(); // no apiKey configured
+  const res = await app.request('/tasks/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'do stuff' }) });
+  expect(res.status).toBe(400);
+  expect(await res.json()).toMatchObject({ error: 'autopilot_key_missing' });
+});
+
+it('POST /tasks/plan decomposes a goal into an epic with sequential phase subtasks', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const tasks = new TaskStore(db);
+  const config = new ConfigStore(db); config.update({ autopilot: { apiKey: 'k' } });
+  const app = createServer({
+    tasks, readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine: null as any, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config,
+    makeInference: () => new FakeInference('[{"title":"Schema","type":"task"},{"title":"API","type":"feature"}]'),
+  });
+  const res = await app.request('/tasks/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'build app' }) });
+  expect(res.status).toBe(201);
+  const body = await res.json() as { epic: { id: string; type: string; title: string }; phases: { id: string; title: string; parent_id: string }[] };
+  expect(body.epic.type).toBe('epic');
+  expect(body.epic.title).toBe('build app');
+  expect(body.phases.map(p => p.title)).toEqual(['Schema', 'API']);
+  expect(body.phases.every(p => p.parent_id === body.epic.id)).toBe(true);
+  // phase 2 depends on phase 1
+  expect(tasks.depsAmong(body.phases.map(p => p.id))).toEqual([{ task_id: body.phases[1].id, depends_on_id: body.phases[0].id }]);
+});
+
+it('POST /tasks/plan stores the model-assigned agent name as a label', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const tasks = new TaskStore(db);
+  const config = new ConfigStore(db); config.update({ autopilot: { apiKey: 'k' } });
+  const app = createServer({
+    tasks, readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine: null as any, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config,
+    makeInference: () => new FakeInference('[{"title":"Schema","type":"task","agent":"Nova"}]'),
+  });
+  const res = await app.request('/tasks/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'build app' }) });
+  const body = await res.json() as { phases: { labels: string[] }[] };
+  expect(body.phases[0].labels).toContain('agent:Nova');
+});
+
+it('POST /tasks/plan with supplied phases skips the LLM and needs no key', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const tasks = new TaskStore(db);
+  const app = createServer({
+    tasks, readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine: null as any, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config: new ConfigStore(db),
+    makeInference: () => { throw new Error('LLM must not be called in manual mode'); },
+  });
+  const res = await app.request('/tasks/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'manual goal', phases: [{ title: 'One', type: 'feature' }, { title: 'Two' }] }) });
+  expect(res.status).toBe(201);
+  const body = await res.json() as { epic: { title: string }; phases: { title: string; type: string }[] };
+  expect(body.epic.title).toBe('manual goal');
+  expect(body.phases.map(p => [p.title, p.type])).toEqual([['One', 'feature'], ['Two', 'task']]);
+});
+
+it('POST /tasks/plan with engage=true engages a mission on the epic', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const tasks = new TaskStore(db);
+  const config = new ConfigStore(db); config.update({ autopilot: { apiKey: 'k' } });
+  let engagedEpic = '';
+  const engine = { engage: async (input: { epicId: string }) => { engagedEpic = input.epicId; return { id: 'm-x', epic_id: input.epicId, autonomy: 'L3', max_sessions: 1, state: 'active' }; } } as unknown as MissionEngine;
+  const app = createServer({
+    tasks, readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config,
+    makeInference: () => new FakeInference('[{"title":"Only phase"}]'),
+  });
+  const res = await app.request('/tasks/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'ship it', engage: true }) });
+  expect(res.status).toBe(201);
+  const body = await res.json() as { epic: { id: string }; mission: { id: string } };
+  expect(body.mission.id).toBe('m-x');
+  expect(engagedEpic).toBe(body.epic.id);
 });

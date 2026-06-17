@@ -31,6 +31,22 @@ export class TaskStore {
   setStatus(id: string, status: TaskStatus): void {
     this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(status, id);
   }
+
+  update(id: string, patch: { title?: string; type?: string; priority?: string }): Task | null {
+    const sets: string[] = []; const p: Record<string, unknown> = { id };
+    if (typeof patch.title === 'string') { sets.push('title = @title'); p.title = patch.title; }
+    if (typeof patch.type === 'string') { sets.push('type = @type'); p.type = patch.type; }
+    if (typeof patch.priority === 'string') { sets.push('priority = @priority'); p.priority = patch.priority; }
+    if (sets.length > 0) this.db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = @id`).run(p);
+    return this.get(id);
+  }
+
+  delete(id: string): void {
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM task_deps WHERE task_id = ? OR depends_on_id = ?').run(id, id);
+      this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
+    })();
+  }
   addDep(taskId: string, dependsOnId: string): void {
     this.db.prepare('INSERT OR IGNORE INTO task_deps (task_id, depends_on_id) VALUES (?, ?)').run(taskId, dependsOnId);
   }

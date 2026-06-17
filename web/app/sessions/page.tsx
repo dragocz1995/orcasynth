@@ -1,58 +1,17 @@
 'use client';
-import { useState } from 'react';
-import dynamic from 'next/dynamic';
-import { TerminalSquare, SquareSlash, Power } from 'lucide-react';
+export const dynamic = 'force-dynamic';
 import { useSessions } from '../../lib/queries';
-import { useKillSession, useSendInput } from '../../lib/mutations';
-import { SendInput } from '../../components/control/SendInput';
-import { useToast } from '../../components/ui/Toast';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { Section } from '../../components/ui/Section';
-import { IconButton } from '../../components/ui/IconButton';
-import { Modal } from '../../components/ui/Modal';
-import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { ModuleShell } from '../../components/shell/ModuleShell';
-
-// xterm references browser-only `self`; skip SSR to avoid prerender errors
-const TerminalPanel = dynamic(
-  () => import('../../components/terminal/TerminalPanel').then((m) => m.TerminalPanel),
-  { ssr: false },
-);
+import { SessionsView } from '../../modules/sessions/SessionsView';
 
 export default function SessionsPage() {
   const sessions = useSessions();
-  const kill = useKillSession();
-  const send = useSendInput();
-  const { toast } = useToast();
-  const [openTerm, setOpenTerm] = useState<string | null>(null);
-
   return (
     <ModuleShell moduleId="sessions">
       <div className="flex w-full flex-col gap-6">
         <PageHeader title="Sessions" count={sessions.data?.length} />
-        <Section title="Sessions" icon={TerminalSquare}>
-          {sessions.isLoading ? <LoadingState /> : sessions.isError ? <ErrorState message="orca daemon unreachable" onRetry={() => sessions.refetch()} />
-            : sessions.data && sessions.data.length > 0 ? (
-              <ul className="flex flex-col divide-y divide-border">
-                {sessions.data.map((s) => (
-                  <li key={s} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <span className="font-mono text-xs text-text-muted">{s}</span>
-                    <div className="flex items-center gap-2">
-                      <IconButton icon={TerminalSquare} label="Terminal" onClick={() => setOpenTerm(s)} />
-                      <SendInput onSend={(keys) => send.mutate({ name: s, keys }, { onSuccess: () => toast(`Sent to ${s}`), onError: (e) => toast(String(e), 'error') })} />
-                      <IconButton icon={SquareSlash} label="Interrupt" onClick={() => send.mutate({ name: s, keys: ['C-c'] }, { onSuccess: () => toast(`Interrupted ${s}`) })} />
-                      <IconButton icon={Power} label="Kill" variant="danger" onClick={() => kill.mutate(s, { onSuccess: () => toast(`Killed ${s}`), onError: (e) => toast(String(e), 'error') })} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : <EmptyState title="No live sessions" />}
-        </Section>
-        {openTerm && (
-          <Modal title={`Terminal — ${openTerm}`} onClose={() => setOpenTerm(null)}>
-            <TerminalPanel name={openTerm} onKilled={() => setOpenTerm(null)} />
-          </Modal>
-        )}
+        <SessionsView />
       </div>
     </ModuleShell>
   );

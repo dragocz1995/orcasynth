@@ -41,6 +41,24 @@ describe('TaskStore', () => {
     expect(store.depsAmong([])).toEqual([]);
   });
 
+  it('update changes only the provided fields', () => {
+    store.create({ id: 'u', project_id: 1, title: 'Old', type: 'task', priority: 'P2' });
+    store.update('u', { title: 'New', priority: 'P0' });
+    const t = store.get('u')!;
+    expect(t.title).toBe('New');
+    expect(t.priority).toBe('P0');
+    expect(t.type).toBe('task'); // untouched
+  });
+
+  it('delete removes the task and its dependency edges', () => {
+    store.create({ id: 'a', project_id: 1, title: 'A' });
+    store.create({ id: 'b', project_id: 1, title: 'B' });
+    store.addDep('b', 'a');
+    store.delete('a');
+    expect(store.get('a')).toBeNull();
+    expect(store.depsAmong(['a', 'b'])).toEqual([]); // edge gone too
+  });
+
   it('setExec sets, replaces and clears the exec label, preserving others', () => {
     store.create({ id: 'x', project_id: 1, title: 'X', labels: ['area:ui'] });
     store.setExec('x', 'sonnet');

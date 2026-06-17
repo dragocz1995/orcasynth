@@ -42,7 +42,9 @@ export class MissionEngine {
       this.d.missions.setState(id, 'disengaged'); this.d.bus.publish({ type: 'mission', missionId: id, state: 'disengaged' }); return;
     }
 
-    let running = (await this.d.tmux.list()).filter(s => s.startsWith('orca-')).length;
+    // Slots in use = this epic's own in-progress children — NOT all global orca- tmux
+    // sessions (other projects/missions would otherwise starve this one).
+    let running = kids.filter(t => t.status === 'in_progress').length;
     for (const task of this.d.readiness.ready(this.d.project.id)) {
       if (running >= m.max_sessions) break;
       if (task.parent_id !== m.epic_id) continue;
@@ -50,8 +52,9 @@ export class MissionEngine {
       const permitted = (m.autonomy === 'L3' || m.autonomy === 'L2') && isCleared(triggered, m.cleared_guardrails);
       if (!permitted) continue;
       const spec = resolveExecutor(task.labels, this.d.fallback);
+      const named = task.labels.find((l) => l.startsWith('agent:'))?.slice('agent:'.length);
       this.d.tasks.setStatus(task.id, 'in_progress');
-      await this.d.spawn.launch({ projectId: this.d.project.id, projectPath: this.d.project.path, taskId: task.id, agentName: this.d.nameAgent(), spec });
+      await this.d.spawn.launch({ projectId: this.d.project.id, projectPath: this.d.project.path, taskId: task.id, agentName: named || this.d.nameAgent(), spec });
       running++;
     }
   }

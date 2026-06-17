@@ -1,0 +1,61 @@
+import { describe, it, expect } from 'vitest';
+import { parsePhases, decompose, planPrompt, defaultPromptTemplate } from '../../src/overseer/planner.js';
+import { FakeInference } from '../../src/inference/client.js';
+
+describe('planner.parsePhases', () => {
+  it('parses a clean JSON array', () => {
+    const phases = parsePhases('[{"title":"Set up schema","type":"task"},{"title":"Add API","type":"feature"}]');
+    expect(phases).toEqual([
+      { title: 'Set up schema', type: 'task' },
+      { title: 'Add API', type: 'feature' },
+    ]);
+  });
+
+  it('extracts the array from surrounding prose / fences', () => {
+    const phases = parsePhases('Sure! Here is the plan:\n```json\n[{"title":"Phase one"}]\n```\nDone.');
+    expect(phases).toEqual([{ title: 'Phase one', type: 'task' }]); // missing type defaults to task
+  });
+
+  it('coerces unknown types to task and drops titleless entries', () => {
+    const phases = parsePhases('[{"title":"Keep","type":"wat"},{"type":"bug"},{"title":"  "}]');
+    expect(phases).toEqual([{ title: 'Keep', type: 'task' }]);
+  });
+
+  it('captures and sanitizes the model-assigned agent name', () => {
+    const phases = parsePhases('[{"title":"A","type":"task","agent":"Nova"},{"title":"B","agent":"At las!"},{"title":"C"}]');
+    expect(phases[0].agent).toBe('Nova');
+    expect(phases[1].agent).toBe('Atlas'); // stripped to a tmux-safe token
+    expect(phases[2].agent).toBeUndefined();
+  });
+
+  it('throws when there is no array', () => {
+    expect(() => parsePhases('no json here')).toThrow();
+  });
+
+  it('throws when the array has no valid phases', () => {
+    expect(() => parsePhases('[]')).toThrow();
+  });
+});
+
+describe('planner.planPrompt', () => {
+  it('substitutes the goal into a {{goal}} placeholder', () => {
+    expect(planPrompt('ship it', 'Plan this: {{goal}} now')).toBe('Plan this: ship it now');
+  });
+  it('appends the goal when the template lacks a placeholder', () => {
+    expect(planPrompt('ship it', 'No placeholder here')).toContain('Goal: ship it');
+  });
+  it('default template contains the {{goal}} placeholder', () => {
+    expect(defaultPromptTemplate()).toContain('{{goal}}');
+  });
+});
+
+describe('planner.decompose', () => {
+  it('runs the inference client and returns validated phases', async () => {
+    const inf = new FakeInference('[{"title":"A","type":"feature"},{"title":"B"}]');
+    const phases = await decompose(inf, 'build a thing');
+    expect(phases).toEqual([
+      { title: 'A', type: 'feature' },
+      { title: 'B', type: 'task' },
+    ]);
+  });
+});

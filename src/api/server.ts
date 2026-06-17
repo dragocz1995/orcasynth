@@ -12,6 +12,9 @@ import type { TmuxDriver } from '../tmux/types.js';
 import type { EventBus } from './sse.js';
 import type { AgentSpec } from '../spawn/commandBuilder.js';
 import { resolveExecutor } from '../overseer/routing.js';
+import { decompose, VALID_TYPES as VALID_PHASE_TYPES } from '../overseer/planner.js';
+import { RelayClient } from '../inference/client.js';
+import type { InferenceClient, RelayConfig } from '../inference/types.js';
 import { uniqueName } from '../daemon/uniqueName.js';
 import type { Clock } from '../shared/clock.js';
 import type { ConfigStore } from '../store/configStore.js';
@@ -34,6 +37,8 @@ export interface ServerDeps {
   events?: EventStore;
   projects?: ProjectStore;
   git?: GitReader;
+  /** Factory for the planning LLM client; defaults to RelayClient. Overridable in tests. */
+  makeInference?: (cfg: RelayConfig) => InferenceClient;
 }
 
 export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; token: string } }> {
@@ -101,7 +106,59 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const id = c.req.param('id');
     if (b.status) { d.tasks.setStatus(id, b.status); d.bus.publish({ type: 'task', taskId: id, status: b.status }); }
     if (typeof b.exec === 'string') { d.tasks.setExec(id, b.exec); }
+    if (typeof b.title === 'string' || typeof b.type === 'string' || typeof b.priority === 'string') {
+      d.tasks.update(id, { title: b.title, type: b.type, priority: b.priority });
+    }
     return c.json(d.tasks.get(id));
+  });
+  app.delete('/tasks/:id', c => {
+    const id = c.req.param('id');
+    d.tasks.delete(id);
+    d.bus.publish({ type: 'task', taskId: id, status: 'cancelled' });
+    return c.json({ ok: true });
+  });
+  app.post('/tasks/plan', async c => {
+    const b = await c.req.json() as { goal?: string; exec?: string; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title?: string; type?: string }[] };
+    const goal = (b.goal ?? '').trim();
+    if (!goal) return c.json({ error: 'goal required' }, 400);
+    if (b.exec && !d.config.get().allowedExecs.includes(b.exec)) return c.json({ error: 'exec not allowed' }, 400);
+
+    let phases: { title: string; type: string; agent?: string }[];
+    if (Array.isArray(b.phases) && b.phases.length > 0) {
+      // Manual mode: phases supplied by the client — no LLM, no key required.
+      phases = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
+      if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
+    } else {
+      // Autopilot mode: decompose the goal via the configured relay model.
+      const cfg = d.config.get();
+      const key = d.config.apiKey();
+      if (!key) return c.json({ error: 'autopilot_key_missing' }, 400);
+      const inf = (d.makeInference ?? ((rc) => new RelayClient(rc)))({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
+      try {
+        phases = await decompose(inf, goal, cfg.autopilot.prompt);
+      } catch {
+        return c.json({ error: 'plan_parse_failed' }, 502);
+      }
+    }
+
+    const newId = () => `${basename(d.project.path)}-${randomBytes(4).toString('hex')}`;
+    const epic = d.tasks.create({ id: newId(), project_id: d.project.id, title: goal, type: 'epic' });
+    d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
+    const created: typeof epic[] = [];
+    for (const ph of phases) {
+      const child = d.tasks.create({ id: newId(), project_id: d.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [] });
+      const prev = created[created.length - 1];
+      if (prev) d.tasks.addDep(child.id, prev.id); // sequential: phase n depends on n-1
+      if (b.exec) d.tasks.setExec(child.id, b.exec);
+      d.bus.publish({ type: 'task', taskId: child.id, status: child.status });
+      created.push(child);
+    }
+
+    let mission;
+    if (b.engage === true) {
+      mission = await d.engine.engage({ epicId: epic.id, autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1, clearedGuardrails: [] });
+    }
+    return c.json({ epic, phases: created.map((t) => d.tasks.get(t.id)), mission }, 201);
   });
 
   app.get('/sessions', async c => c.json(await d.tmux.list()));

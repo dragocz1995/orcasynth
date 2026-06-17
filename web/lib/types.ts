@@ -3,6 +3,9 @@ export interface Task { id: string; title: string; status: TaskStatus; type?: st
 export interface Session { name: string }
 export interface Mission { id: string; epic_id: string; autonomy: string; max_sessions: number; state: string }
 export interface CreateTaskInput { title: string; type?: string; priority?: string }
+export interface UpdateTaskInput { title?: string; type?: string; priority?: string }
+export interface PlanInput { goal: string; exec?: string; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title: string; type?: string }[] }
+export interface PlanResult { epic: Task; phases: Task[]; mission?: Mission }
 export interface EngageInput { epicId: string; autonomy: string; maxSessions: number; clearedGuardrails: string[] }
 export type DerivedSignal = { type: 'working' } | { type: 'complete' } | { type: 'needs_input'; question: string };
 // Wire contract — must mirror the backend canonical definition in src/api/sse.ts
@@ -14,14 +17,16 @@ export interface OrcaConfig {
   allowedExecs: string[];
   customModels: { label: string; exec: string }[];
   hiddenPresets: string[];
-  autopilot: { model: string; apiUrl: string; apiKeySet: boolean; notes: string };
+  autopilot: { model: string; apiUrl: string; apiKeySet: boolean; notes: string; prompt: string };
+  providers: Record<string, { bin: string; args: string }>;
   defaults: { exec: string; autonomy: string; maxSessions: number };
 }
 export interface ConfigPatch {
   allowedExecs?: string[];
   customModels?: { label: string; exec: string }[];
   hiddenPresets?: string[];
-  autopilot?: { model?: string; apiUrl?: string; apiKey?: string; notes?: string };
+  autopilot?: { model?: string; apiUrl?: string; apiKey?: string; notes?: string; prompt?: string };
+  providers?: Record<string, { bin: string; args: string }>;
   defaults?: { exec?: string; autonomy?: string; maxSessions?: number };
 }
 export interface MissionTask { id: string; title: string; status: TaskStatus; type: string; parent_id: string | null }

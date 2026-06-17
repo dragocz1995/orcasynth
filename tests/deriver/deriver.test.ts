@@ -11,7 +11,7 @@ function setup() {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
   const tasks = new TaskStore(db); const agents = new AgentStore(db);
   tasks.create({ id: 'orca-1', project_id: 1, title: 'T' }); tasks.setStatus('orca-1', 'in_progress');
-  agents.upsert({ project_id: 1, name: 'TestAgent', program: 'opencode', model: 'ollama/deepseek-v4-flash' });
+  agents.upsert({ project_id: 1, name: 'TestAgent', program: 'opencode', model: 'ollama-cloud/deepseek-v4-flash' });
   const tmux = new FakeTmuxDriver(); tmux.setPane('orca-TestAgent', OC_DIALOG);
   const emitted: any[] = [];
   const deriver = new Deriver({

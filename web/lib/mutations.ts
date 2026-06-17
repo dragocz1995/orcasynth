@@ -2,7 +2,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { orcaClient } from './orcaClient';
 import { QUERY_KEYS } from './queries';
-import type { CreateTaskInput, EngageInput, ConfigPatch } from './types';
+import type { CreateTaskInput, UpdateTaskInput, PlanInput, EngageInput, ConfigPatch } from './types';
 
 export function useSpawn() {
   const qc = useQueryClient();
@@ -14,6 +14,21 @@ export function useSpawn() {
 export function useCreateTask() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (input: CreateTaskInput) => orcaClient.createTask(input), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }) });
+}
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (v: { id: string; patch: UpdateTaskInput }) => orcaClient.updateTask(v.id, v.patch), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }) });
+}
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (id: string) => orcaClient.deleteTask(id), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }) });
+}
+export function usePlanTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PlanInput) => orcaClient.planTask(input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }); qc.invalidateQueries({ queryKey: QUERY_KEYS.missions }); },
+  });
 }
 export function useCloseTask() {
   const qc = useQueryClient();

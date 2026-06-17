@@ -9,9 +9,17 @@ describe('SpawnService', () => {
     const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
     const agents = new AgentStore(db); const tmux = new FakeTmuxDriver();
     const svc = new SpawnService({ tmux, agents });
-    const { session } = await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'SwiftLake', spec: { program: 'opencode', model: 'ollama/deepseek-v4-flash' } });
+    const { session } = await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'SwiftLake', spec: { program: 'opencode', model: 'ollama-cloud/deepseek-v4-flash' } });
     expect(session).toBe('orca-SwiftLake');
     expect(await tmux.list()).toContain('orca-SwiftLake');
     expect(agents.programFor('SwiftLake')).toBe('opencode');
+  });
+
+  it('applies the provider resolver binary + args to the spawned command', async () => {
+    const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+    const agents = new AgentStore(db); const tmux = new FakeTmuxDriver();
+    const svc = new SpawnService({ tmux, agents, providers: (program) => program === 'opencode' ? { bin: '/usr/bin/oc', args: '--pure' } : undefined });
+    await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', spec: { program: 'opencode', model: 'm' } });
+    expect(tmux.commandFor('orca-Nova')).toContain('/usr/bin/oc run --model m --pure');
   });
 });

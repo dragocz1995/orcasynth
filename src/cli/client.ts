@@ -1,7 +1,9 @@
 export class OrcaClient {
-  constructor(private base: string) {}
+  constructor(private base: string, private token?: string) {}
   private async req(path: string, init?: RequestInit) {
-    const res = await fetch(`${this.base}${path}`, init);
+    const headers = new Headers(init?.headers);
+    if (this.token) headers.set('authorization', `Bearer ${this.token}`);
+    const res = await fetch(`${this.base}${path}`, { ...init, headers });
     if (!res.ok) throw new Error(`orca API ${res.status} on ${path}`);
     return res.json();
   }
@@ -10,4 +12,5 @@ export class OrcaClient {
   ready() { return this.req('/tasks/ready'); }
   sessions() { return this.req('/sessions'); }
   engage(input: unknown) { return this.req('/missions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }); }
+  close(taskId: string) { return this.req(`/tasks/${encodeURIComponent(taskId)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status: 'closed' }) }); }
 }

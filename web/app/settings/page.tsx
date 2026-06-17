@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, type LucideIcon } from 'lucide-react';
+import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, type LucideIcon } from 'lucide-react';
+import { PROVIDERS, ProviderLogo } from '../../modules/settings/providers';
 import { useConfig } from '../../lib/queries';
 import { useUpdateConfig } from '../../lib/mutations';
 import { EXEC_PRESETS, allModels } from '../../lib/execPresets';
@@ -8,10 +9,13 @@ import { useToast } from '../../components/ui/Toast';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Section } from '../../components/ui/Section';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
+import { Field } from '../../components/ui/Field';
 import { Toggle } from '../../components/ui/Toggle';
 import { Segmented } from '../../components/ui/Segmented';
 import { SettingCard } from '../../components/ui/SettingCard';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { HelpTip } from '../../components/ui/HelpTip';
 import { LoadingState, ErrorState } from '../../components/ui/states';
 import { ModuleShell } from '../../components/shell/ModuleShell';
 import '../../modules/settings/theme.css';
@@ -20,10 +24,11 @@ const inputClass = 'w-full rounded-md border border-border bg-bg px-3 py-2 text-
 
 const PRESET_EXECS = new Set(EXEC_PRESETS.map((p) => p.exec));
 
-type Category = 'models' | 'autopilot' | 'defaults';
+type Category = 'models' | 'autopilot' | 'providers' | 'defaults';
 const CATEGORIES: { id: Category; label: string; icon: LucideIcon }[] = [
   { id: 'models', label: 'Models', icon: Boxes },
   { id: 'autopilot', label: 'Autopilot', icon: Bot },
+  { id: 'providers', label: 'Providers', icon: Plug },
   { id: 'defaults', label: 'Defaults', icon: SlidersHorizontal },
 ];
 
@@ -40,6 +45,8 @@ export default function SettingsPage() {
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [providers, setProviders] = useState<Record<string, { bin: string; args: string }>>({});
 
   const [defExec, setDefExec] = useState('');
   const [defAutonomy, setDefAutonomy] = useState('');
@@ -64,6 +71,8 @@ export default function SettingsPage() {
       setModel(config.data.autopilot.model);
       setApiUrl(config.data.autopilot.apiUrl);
       setNotes(config.data.autopilot.notes);
+      setPrompt(config.data.autopilot.prompt);
+      setProviders(config.data.providers ?? {});
       setDefExec(config.data.defaults.exec);
       setDefAutonomy(config.data.defaults.autonomy);
       setDefMaxSessions(config.data.defaults.maxSessions);
@@ -244,7 +253,7 @@ export default function SettingsPage() {
             title="Autopilot"
             icon={Bot}
             actions={
-              <Button variant="accent" icon={Save} onClick={() => update.mutate({ autopilot: { model, apiUrl, notes, ...(apiKey ? { apiKey } : {}) } }, { onSuccess: () => { toast('Autopilot saved'); setApiKey(''); }, onError: (e) => toast(String(e), 'error') })}>
+              <Button variant="accent" icon={Save} onClick={() => update.mutate({ autopilot: { model, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } }, { onSuccess: () => { toast('Autopilot saved'); setApiKey(''); }, onError: (e) => toast(String(e), 'error') })}>
                 Save autopilot
               </Button>
             }
@@ -262,6 +271,57 @@ export default function SettingsPage() {
               <SettingCard title="Notes" description="Guidance the autopilot follows">
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
               </SettingCard>
+              <div className="sm:col-span-2 rounded-lg border border-border bg-surface p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-text">Planner prompt</span>
+                  <HelpTip>
+                    Template the Pilot uses to decompose a goal into phases. Use the
+                    <span className="mx-1 rounded bg-elevated px-1 font-mono text-text">{'{{goal}}'}</span>
+                    placeholder — it is replaced with the goal you enter. The model must return a JSON array of
+                    <span className="font-mono"> {'{title, type, agent}'}</span> objects.
+                  </HelpTip>
+                </div>
+                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={8} spellCheck={false} className={`${inputClass} resize-y font-mono text-xs leading-relaxed`} />
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {category === 'providers' && (
+          <Section
+            title="Providers"
+            icon={Plug}
+            actions={
+              <Button variant="accent" icon={Save} onClick={() => update.mutate({ providers }, { onSuccess: () => toast('Providers saved'), onError: (e) => toast(String(e), 'error') })}>
+                Save providers
+              </Button>
+            }
+          >
+            <p className="mb-4 text-sm text-text-muted">Where each agent CLI lives and any extra flags passed when orca spawns it. Leave the binary as-is to use it from <span className="font-mono text-text">$PATH</span>.</p>
+            <div className="flex flex-col gap-3">
+              {PROVIDERS.map((p) => {
+                const cur = providers[p.id] ?? { bin: p.binHint, args: '' };
+                const set = (patch: Partial<{ bin: string; args: string }>) => setProviders((prev) => ({ ...prev, [p.id]: { ...cur, ...patch } }));
+                return (
+                  <div key={p.id} className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-center">
+                    <div className="flex items-center gap-3 sm:w-44 sm:shrink-0">
+                      <ProviderLogo meta={p} />
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-text">{p.label}</div>
+                        <div className="font-mono text-[11px] text-text-muted">{p.id}</div>
+                      </div>
+                    </div>
+                    <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                      <Field label="Binary">
+                        <Input value={cur.bin} placeholder={p.binHint} onChange={(e) => set({ bin: e.target.value })} className="font-mono text-xs" />
+                      </Field>
+                      <Field label="Extra args">
+                        <Input value={cur.args} placeholder={p.argsHint} onChange={(e) => set({ args: e.target.value })} className="font-mono text-xs" />
+                      </Field>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Section>
         )}

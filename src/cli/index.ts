@@ -15,14 +15,17 @@ async function ensureDaemon() {
 }
 
 async function main() {
-  const [cmd] = process.argv.slice(2);
+  const [cmd, arg] = process.argv.slice(2);
   await ensureDaemon();
-  const c = new OrcaClient(BASE);
+  const c = new OrcaClient(BASE, process.env.ORCA_TOKEN);
   switch (cmd) {
     case 'ls': console.log(JSON.stringify(await c.tasks(), null, 2)); break;
     case 'ready': console.log(JSON.stringify(await c.ready(), null, 2)); break;
     case 'sessions': console.log(JSON.stringify(await c.sessions(), null, 2)); break;
-    default: console.error('usage: orca <ls|ready|sessions>'); process.exit(1);
+    case 'close':
+      if (!arg) { console.error('usage: orca close <taskId>'); process.exit(1); }
+      await c.close(arg); console.log(`closed ${arg}`); break;
+    default: console.error('usage: orca <ls|ready|sessions|close <taskId>>'); process.exit(1);
   }
 }
 main().catch(e => { console.error(e.message); process.exit(1); });

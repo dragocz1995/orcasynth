@@ -4,7 +4,7 @@ import { resolveExecutor } from '../../src/overseer/routing.js';
 const FB = { program: 'claude-code', model: 'sonnet' };
 describe('resolveExecutor', () => {
   it('routes exec:provider/model to opencode', () => {
-    expect(resolveExecutor(['exec:ollama/deepseek-v4-flash'], FB)).toEqual({ program: 'opencode', model: 'ollama/deepseek-v4-flash' });
+    expect(resolveExecutor(['exec:ollama-cloud/deepseek-v4-flash'], FB)).toEqual({ program: 'opencode', model: 'ollama-cloud/deepseek-v4-flash' });
   });
   it('routes bare exec:sonnet to claude', () => {
     expect(resolveExecutor(['exec:sonnet'], FB)).toEqual({ program: 'claude-code', model: 'sonnet' });

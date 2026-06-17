@@ -16,6 +16,9 @@ import { EventStore } from '../store/eventStore.js';
 import { ProjectStore } from '../store/projectStore.js';
 import { RealGitReader } from '../git/gitReader.js';
 import type { TmuxDriver } from '../tmux/types.js';
+import { uniqueName } from './uniqueName.js';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 export interface BuildOpts {
   dbPath: string;
@@ -43,11 +46,15 @@ export function buildApp(opts: BuildOpts) {
   }
   const projects = new ProjectStore(db);
   const git = new RealGitReader();
-  const spawn = new SpawnService({ tmux, agents });
+  // Give spawned agents a way to close their task: the orca CLI path + daemon URL + a service token.
+  const cliPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli', 'index.js');
+  const serviceToken = users.count() > 0 ? users.issueToken(users.list()[0]!.id) : '';
+  const orcaCli = { cliPath, url: `http://localhost:${process.env.ORCA_PORT ?? 4400}`, token: serviceToken };
+  const spawn = new SpawnService({ tmux, agents, orca: orcaCli, providers: (program) => config.get().providers[program] });
   const bus = new EventBus();
   const events = new EventStore(db);
   bus.subscribe((e) => { try { events.record(e); } catch (err) { console.error('[orca] event record failed', err); } });
-  const engine = new MissionEngine({ tasks, readiness, missions, spawn, tmux, bus, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: () => `Agent${Math.floor(performance.now()) % 9999}` });
+  const engine = new MissionEngine({ tasks, readiness, missions, spawn, tmux, bus, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: uniqueName });
   // Deriver resolves a session's task via the agent registry / in-progress task (simplified: first in_progress child).
   const deriver = new Deriver({ tmux, agents, tasks, sink: bus, clock: new SystemClock(), sessionTaskId: () => tasks.list({ status: 'in_progress' })[0]?.id ?? null });
   const openMode = users.count() === 0 && opts.allowOpen === true;

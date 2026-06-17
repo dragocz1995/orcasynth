@@ -34,6 +34,7 @@ vi.mock('next/dynamic', () => ({
 let killed = false;
 const server = setupServer(
   http.get('http://localhost:4400/sessions', () => HttpResponse.json(['orca-SwiftLake'])),
+  http.get('http://localhost:4400/sessions/orca-SwiftLake/pane', () => HttpResponse.json({ pane: 'line a\nline b' })),
   http.delete('http://localhost:4400/sessions/orca-SwiftLake', () => { killed = true; return HttpResponse.json({ ok: true }); }),
 );
 beforeAll(() => server.listen()); afterAll(() => server.close());
@@ -43,7 +44,9 @@ describe('SessionsPage', () => {
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SessionsPage /></ToastProvider></Wrapper>);
     await waitFor(() => expect(screen.getByText('orca-SwiftLake')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Kill' }));
+    // Kill lives in the red action menu: open it, then pick the item
+    fireEvent.click(screen.getByRole('button', { name: 'Kill session' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Kill session' }));
     await waitFor(() => expect(killed).toBe(true));
   });
 
