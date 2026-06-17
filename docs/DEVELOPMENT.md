@@ -1,0 +1,237 @@
+# Development
+
+## Prerequisites
+
+- **Node.js** ≥22 (ESM)
+- **tmux** (for running agents)
+- **npm**
+
+## Setup
+
+```bash
+git clone <repo> && cd orca
+npm install
+npm run build
+```
+
+## Development workflow
+
+### Run the daemon
+
+```bash
+npm run serve
+```
+
+Uses `--experimental-strip-types` for direct TS execution. Starts on `http://localhost:4400`.
+
+### Run tests
+
+```bash
+npm test            # single run
+npm run test:watch  # watch mode
+```
+
+Tests use Vitest with fake implementations for tmux, clock, and inference — no external dependencies needed.
+
+### Build
+
+```bash
+npm run build
+```
+
+Compiles TypeScript to `dist/` and copies `src/store/schema.sql`. The CLI binary is at `dist/cli/index.js`.
+
+### CLI
+
+```bash
+node dist/cli/index.js ls
+node dist/cli/index.js ready
+node dist/cli/index.js sessions
+```
+
+Or link globally: `npm link` then `orca ls`.
+
+The CLI auto-starts the daemon if it isn't running (set `ORCA_AUTOSTART=0` to disable).
+
+### Web frontend
+
+```bash
+cd web
+npm install
+npm run dev     # Next.js dev server
+npm test        # Vitest
+npm run build   # Production build
+```
+
+Connects to the daemon at `NEXT_PUBLIC_ORCA_URL` (default `http://localhost:4400`).
+
+---
+
+## Project conventions
+
+### Code style
+
+- **TypeScript** strict mode with `noUncheckedIndexedAccess`
+- **ESM** only — no CommonJS
+- No `any` types
+- No static methods — constructor DI everywhere
+- No comments in source code
+- No dead code, no debug leftovers
+
+### Architecture
+
+- **Thin controllers** (`src/api/`), business logic in services
+- **Constructor dependency injection** — all services receive their deps via constructor
+- **Interface-driven** — `TmuxDriver`, `Clock` have real and fake implementations
+- **Single source of truth** — no parallel logic or duplicate systems
+
+### Naming
+
+- Files: `camelCase.ts`
+- Classes: `PascalCase`
+- Functions/variables: `camelCase`
+- Constants: `UPPER_SNAKE_CASE`
+- SQL identifiers: `snake_case`
+
+### Testing
+
+- Tests mirror `src/` structure in `tests/`
+- Fake implementations in test files (not shared)
+- Deterministic time via `FakeClock`
+- No real tmux or network calls in tests
+
+---
+
+## Project structure
+
+```
+src/
+├── api/              Hono REST router + SSE event bus
+│   ├── server.ts     Route definitions
+│   └── sse.ts        EventBus implementation
+├── cli/              CLI client (ls, ready, sessions)
+│   ├── index.ts      Entrypoint with daemon autostart
+│   └── client.ts     HTTP client for the daemon API
+├── daemon/           Daemon bootstrap
+│   ├── index.ts      HTTP server entrypoint
+│   ├── bootstrap.ts  DI wiring
+│   └── uniqueName.ts Agent name generation
+├── deriver/          Agent terminal monitoring
+│   ├── deriver.ts    5s poll loop, state detection
+│   ├── shellPatterns.ts  Prompt detection per program
+│   └── types.ts      Signal types
+├── inference/        LLM inference relay (reserved)
+│   └── client.ts     RelayClient + FakeInference
+├── overseer/         Orchestration engine
+│   ├── missionEngine.ts  Tick loop, spawn logic
+│   ├── guardrails.ts     Regex-based safety checks
+│   └── routing.ts        Task → agent routing
+├── shared/           Utilities
+│   └── clock.ts      Clock interface (system + fake)
+├── spawn/            Agent launcher
+│   ├── spawn.ts      SpawnService
+│   └── commandBuilder.ts  Agent command construction
+├── store/            SQLite data layer
+│   ├── db.ts         Database connection
+│   ├── schema.sql    Table definitions
+│   ├── taskStore.ts  Task CRUD
+│   ├── missionStore.ts  Mission CRUD
+│   ├── agentStore.ts    Agent registry
+│   ├── readiness.ts     Task readiness computation
+│   └── configStore.ts   Daemon configuration
+└── tmux/             tmux abstraction
+    ├── types.ts      TmuxDriver interface
+    └── driver.ts     RealTmuxDriver
+```
+
+---
+
+## Adding a new endpoint
+
+1. Add the handler in `src/api/server.ts`
+2. Add the corresponding method in `web/lib/orcaClient.ts`
+3. Add the TypeScript types in `web/lib/types.ts` if needed
+4. Wire any new service dependencies through `src/daemon/bootstrap.ts`
+5. Add tests in `tests/`
+
+## Adding a new guardrail
+
+1. Add the guardrail name to `GUARDRAILS` in `src/overseer/guardrails.ts`
+2. Add the regex pattern in `PATTERNS`
+3. No other changes needed — guardrails are picked up automatically
+
+---
+
+## Configuration
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `ORCA_URL` | `http://localhost:4400` | Daemon URL for CLI |
+| `ORCA_AUTOSTART` | `1` | Enable CLI daemon autostart |
+| `NEXT_PUBLIC_ORCA_URL` | `http://localhost:4400` | Daemon URL for web UI |
+
+### Runtime config
+
+Stored in SQLite `settings` table. Managed via `GET/PUT /config` API:
+
+```json
+{
+  "allowedExecs": ["sonnet", "codex:gpt-5.4"],
+  "autopilot": {
+    "model": "mimo-v2.5",
+    "apiUrl": "https://ai.coresynth.io/v1",
+    "apiKey": "sk-..."
+  }
+}
+```
+
+---
+
+## Database
+
+SQLite with WAL mode. Schema in `src/store/schema.sql`.
+
+### Tables
+
+```sql
+projects  (id, slug, path)
+tasks     (id, project_id, title, type, status, priority, parent_id, labels, created_at)
+task_deps (task_id, depends_on_id)
+agents    (id, project_id, name, program, model, last_active_ts)
+missions  (id, epic_id, autonomy, max_sessions, cleared_guardrails, state, started_at)
+settings  (id, data)  -- JSON blob for runtime config
+```
+
+DB path defaults to `./orca.db` (configurable via `bootstrap.ts`).
+
+---
+
+## Guardrails
+
+Tasks are blocked if their title or labels match sensitive patterns:
+
+| Guardrail | Pattern |
+|---|---|
+| `schema` | `schema` |
+| `migration` | `migrat*` |
+| `auth` | `auth`, `login`, `password`, `token` |
+| `payments` | `payment`, `billing`, `stripe`, `invoice` |
+| `destructive` | `delete`, `drop`, `truncate`, `rm -rf`, `destroy` |
+
+Blocked tasks are skipped by the mission engine unless the guardrail is cleared in the mission's `cleared_guardrails`.
+
+---
+
+## Agent routing
+
+Tasks can specify an executor via labels:
+
+- `exec:claude-code` → Claude Code (default)
+- `exec:opencode` → OpenCode
+- `exec:codex` → Codex CLI
+- `exec:sonnet` → Claude with Sonnet model
+- `exec:ollama/deepseek-v4-flash` → OpenCode with local model
+
+The resolver is in `src/overseer/routing.ts`. Unrecognized execs fall back to `claude-code`.

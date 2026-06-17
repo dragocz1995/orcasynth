@@ -129,6 +129,17 @@ Next.js web UI at `web/` with:
 cd web && npm install && npm run dev
 ```
 
+## Docs
+
+| Document | Contents |
+|---|---|
+| [API.md](docs/API.md) | Full REST API reference with request/response examples |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module descriptions, data flow, guardrails, autonomy levels |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Setup, conventions, project structure, configuration |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment, systemd, Docker, reverse proxy |
+| [WEB.md](docs/WEB.md) | Web UI pages, components, patterns, real-time updates |
+| [FOLLOWUPS.md](docs/FOLLOWUPS.md) | Deferred features and known limitations |
+
 ## Development
 
 ```bash
@@ -145,19 +156,4 @@ npm run test:watch
 npm run serve
 ```
 
-Test architecture uses fake implementations (`FakeTmuxDriver`, `FakeClock`) to avoid real tmux or LLM dependencies.
-
-## Configuration
-
-Environment variables and configuration options (see `src/daemon/bootstrap.ts`):
-
-- `dbPath` — SQLite database path
-- `relay` — LLM inference relay endpoint (optional, reserved for future use)
-- `project` — project metadata (id, slug, path)
-
-## Follow-ups
-
-See [FOLLOWUPS.md](docs/FOLLOWUPS.md) for deferred features:
-1. Wire the inference module for LLM-driven decisions
-2. Concurrency hardening (`max_sessions > 1`)
-3. Extended API surface (task trees, agent management)
+Test architecture uses fake implementations (`FakeTmuxDriver`, `FakeClock`) to avoid real tmux or LLM dependencies. See [DEVELOPMENT.md](docs/DEVELOPMENT.md) for full details.
