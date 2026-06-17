@@ -172,6 +172,35 @@ it('GET /sessions/:name/stream emits a first pane frame', async () => {
   ctrl.abort(); await reader.cancel();
 });
 
+it('GET /missions/:id returns 404 for unknown mission', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const app = createServer({
+    tasks: new TaskStore(db), readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine: null as any, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config: new ConfigStore(db),
+  });
+  const res = await app.request('/missions/unknown');
+  expect(res.status).toBe(404);
+});
+
+it('GET /missions/:id returns mission detail for a seeded mission', async () => {
+  const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const tasks = new TaskStore(db);
+  const missions = new MissionStore(db);
+  const app = createServer({
+    tasks, readiness: new Readiness(db), missions, bus: new EventBus(),
+    engine: null as any, spawn: null as any, tmux: null as any,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config: new ConfigStore(db),
+  });
+  tasks.create({ id: 'epic', project_id: 1, title: 'E', type: 'epic' });
+  missions.create({ id: 'm1', epic_id: 'epic', autonomy: 'low', max_sessions: 1, cleared_guardrails: [] });
+  const res = await app.request('/missions/m1');
+  expect(res.status).toBe(200);
+  const body = await res.json() as { epic: { id: string }; progress: { total: number } };
+  expect(body.epic.id).toBe('epic');
+  expect(body.progress.total).toBe(0);
+});
+
 it('GET /config returns masked config; PUT updates without exposing the key', async () => {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
   const config = new ConfigStore(db);

@@ -15,6 +15,7 @@ import { resolveExecutor } from '../overseer/routing.js';
 import { uniqueName } from '../daemon/uniqueName.js';
 import type { Clock } from '../shared/clock.js';
 import type { ConfigStore } from '../store/configStore.js';
+import { assembleMissionDetail } from '../store/missionDetail.js';
 
 
 export interface ServerDeps {
@@ -72,6 +73,10 @@ export function createServer(d: ServerDeps): Hono {
   });
 
   app.get('/missions', c => c.json(d.missions.active()));
+  app.get('/missions/:id', (c) => {
+    const detail = assembleMissionDetail({ missions: d.missions, tasks: d.tasks }, c.req.param('id'));
+    return detail ? c.json(detail) : c.json({ error: 'mission not found' }, 404);
+  });
   app.post('/missions', async c => { const b = await c.req.json(); return c.json(await d.engine.engage(b), 201); });
   app.patch('/missions/:id', async (c) => {
     const id = c.req.param('id');
