@@ -1,13 +1,14 @@
 'use client';
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
+import { TerminalSquare, SquareSlash, Power } from 'lucide-react';
 import { useSessions } from '../../lib/queries';
 import { useKillSession, useSendInput } from '../../lib/mutations';
 import { SendInput } from '../../components/control/SendInput';
 import { useToast } from '../../components/ui/Toast';
-import { Panel } from '../../components/ui/Panel';
 import { PageHeader } from '../../components/ui/PageHeader';
-import { Button } from '../../components/ui/Button';
+import { Section } from '../../components/ui/Section';
+import { IconButton } from '../../components/ui/IconButton';
 import { Modal } from '../../components/ui/Modal';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { ModuleShell } from '../../components/shell/ModuleShell';
@@ -27,30 +28,32 @@ export default function SessionsPage() {
 
   return (
     <ModuleShell moduleId="sessions">
-      <Panel>
+      <div className="flex w-full flex-col gap-6">
         <PageHeader title="Sessions" count={sessions.data?.length} />
-        {sessions.isLoading ? <LoadingState /> : sessions.isError ? <ErrorState message="orca daemon unreachable" onRetry={() => sessions.refetch()} />
-          : sessions.data && sessions.data.length > 0 ? (
-            <ul className="flex flex-col divide-y divide-border">
-              {sessions.data.map((s) => (
-                <li key={s} className="flex items-center justify-between gap-3 px-3 py-2">
-                  <span className="font-mono text-xs text-text-muted">{s}</span>
-                  <div className="flex items-center gap-2">
-                    <Button onClick={() => setOpenTerm(s)}>Terminal</Button>
-                    <SendInput onSend={(keys) => send.mutate({ name: s, keys }, { onSuccess: () => toast(`Sent to ${s}`), onError: (e) => toast(String(e), 'error') })} />
-                    <Button onClick={() => send.mutate({ name: s, keys: ['C-c'] }, { onSuccess: () => toast(`Interrupted ${s}`) })}>Interrupt</Button>
-                    <Button variant="danger" onClick={() => kill.mutate(s, { onSuccess: () => toast(`Killed ${s}`), onError: (e) => toast(String(e), 'error') })}>Kill</Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : <EmptyState title="No live sessions" />}
+        <Section title="Sessions" icon={TerminalSquare}>
+          {sessions.isLoading ? <LoadingState /> : sessions.isError ? <ErrorState message="orca daemon unreachable" onRetry={() => sessions.refetch()} />
+            : sessions.data && sessions.data.length > 0 ? (
+              <ul className="flex flex-col divide-y divide-border">
+                {sessions.data.map((s) => (
+                  <li key={s} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <span className="font-mono text-xs text-text-muted">{s}</span>
+                    <div className="flex items-center gap-2">
+                      <IconButton icon={TerminalSquare} label="Terminal" onClick={() => setOpenTerm(s)} />
+                      <SendInput onSend={(keys) => send.mutate({ name: s, keys }, { onSuccess: () => toast(`Sent to ${s}`), onError: (e) => toast(String(e), 'error') })} />
+                      <IconButton icon={SquareSlash} label="Interrupt" onClick={() => send.mutate({ name: s, keys: ['C-c'] }, { onSuccess: () => toast(`Interrupted ${s}`) })} />
+                      <IconButton icon={Power} label="Kill" variant="danger" onClick={() => kill.mutate(s, { onSuccess: () => toast(`Killed ${s}`), onError: (e) => toast(String(e), 'error') })} />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : <EmptyState title="No live sessions" />}
+        </Section>
         {openTerm && (
           <Modal title={`Terminal — ${openTerm}`} onClose={() => setOpenTerm(null)}>
             <TerminalPanel name={openTerm} onKilled={() => setOpenTerm(null)} />
           </Modal>
         )}
-      </Panel>
+      </div>
     </ModuleShell>
   );
 }

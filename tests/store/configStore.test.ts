@@ -8,11 +8,12 @@ let cfg: ConfigStore;
 beforeEach(() => { db = openDb(':memory:'); cfg = new ConfigStore(db); });
 
 describe('ConfigStore', () => {
-  it('returns defaults when empty (all execs allowed, key unset)', () => {
+  it('returns defaults when empty (all execs allowed, key unset, customModels empty)', () => {
     const c = cfg.get();
     expect(c.allowedExecs).toContain('sonnet');
     expect(c.allowedExecs.length).toBe(5);
     expect(c.autopilot.apiKeySet).toBe(false);
+    expect(c.customModels).toEqual([]);
   });
   it('update merges allowedExecs + autopilot and never returns the raw key', () => {
     const c = cfg.update({ allowedExecs: ['sonnet'], autopilot: { model: 'gpt-5.5', apiKey: 'secret-key' } });
@@ -45,5 +46,20 @@ describe('ConfigStore', () => {
     const c = cfg.get();
     expect(c.autopilot.notes).toBe('');
     expect(c.defaults).toEqual({ exec: 'sonnet', autonomy: 'L3', maxSessions: 1 });
+  });
+  it('reads an old row without customModels as empty array', () => {
+    db.prepare("INSERT INTO settings (id, data) VALUES (1, ?)").run(JSON.stringify({ allowedExecs: ['sonnet'], autopilot: { model: 'm', apiUrl: 'u' }, apiKey: null }));
+    const c = cfg.get();
+    expect(c.customModels).toEqual([]);
+  });
+  it('update replaces customModels when provided', () => {
+    const custom = [{ label: 'My Model', exec: 'my/model' }];
+    const c = cfg.update({ customModels: custom });
+    expect(c.customModels).toEqual(custom);
+  });
+  it('update without customModels keeps existing customModels', () => {
+    cfg.update({ customModels: [{ label: 'A', exec: 'a/model' }] });
+    cfg.update({ allowedExecs: ['sonnet'] });
+    expect(cfg.get().customModels).toEqual([{ label: 'A', exec: 'a/model' }]);
   });
 });

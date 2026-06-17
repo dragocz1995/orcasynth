@@ -1,16 +1,15 @@
 'use client';
 import { ModuleShell } from '../../components/shell/ModuleShell';
-import { Panel } from '../../components/ui/Panel';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { UsersPanel } from '../../modules/users/UsersPanel';
 
 export default function UsersPage() {
   return (
     <ModuleShell moduleId="users">
-      <Panel>
+      <div className="flex w-full flex-col gap-6">
         <PageHeader title="Users" />
         <UsersPanel />
-      </Panel>
+      </div>
     </ModuleShell>
   );
 }

@@ -18,4 +18,26 @@ describe('TimelineView', () => {
     expect(await screen.findByText('orca-x')).toBeTruthy();
     expect(screen.getByText('m1')).toBeTruthy();
   });
+
+  it('renders axis tick labels', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><TimelineView /></Wrapper>);
+    // Wait for data to load so the axis renders with real events
+    await screen.findByText('orca-x');
+    const ticks = screen.getAllByTestId('axis-tick');
+    expect(ticks.length).toBe(12);
+    // Each tick label matches HH:MM
+    for (const tick of ticks) {
+      expect(tick.textContent).toMatch(/^\d{2}:\d{2}$/);
+    }
+  });
+
+  it('renders dot markers for events in the window', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><TimelineView /></Wrapper>);
+    await screen.findByText('orca-x');
+    const dots = screen.getAllByTestId('axis-dot');
+    // Both fixture events have timestamps within last 12h of "now"
+    expect(dots.length).toBeGreaterThanOrEqual(1);
+  });
 });

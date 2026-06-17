@@ -1,16 +1,15 @@
 'use client';
 import { ModuleShell } from '../../components/shell/ModuleShell';
-import { Panel } from '../../components/ui/Panel';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { ProjectsView } from '../../modules/projects/ProjectsView';
 
 export default function ProjectsPage() {
   return (
     <ModuleShell moduleId="projects">
-      <Panel>
+      <div className="flex w-full flex-col gap-6">
         <PageHeader title="Projects" />
         <ProjectsView />
-      </Panel>
+      </div>
     </ModuleShell>
   );
 }

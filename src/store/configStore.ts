@@ -2,6 +2,7 @@ import type { Db } from './db.js';
 
 export interface OrcaConfig {
   allowedExecs: string[];
+  customModels: { label: string; exec: string }[];
   autopilot: { model: string; apiUrl: string; apiKeySet: boolean; notes: string };
   defaults: { exec: string; autonomy: string; maxSessions: number };
 }
@@ -10,12 +11,14 @@ const KNOWN_EXECS = ['sonnet', 'ollama/deepseek-v4-flash', 'ollama/kimi-k2.7-cod
 
 export const DEFAULT_CONFIG: OrcaConfig = {
   allowedExecs: [...KNOWN_EXECS],
+  customModels: [],
   autopilot: { model: 'mimo-v2.5', apiUrl: 'https://ai.coresynth.io/v1', apiKeySet: false, notes: '' },
   defaults: { exec: 'sonnet', autonomy: 'L3', maxSessions: 1 },
 };
 
 interface Stored {
   allowedExecs: string[];
+  customModels: { label: string; exec: string }[];
   autopilot: { model: string; apiUrl: string; notes: string };
   apiKey: string | null;
   defaults: { exec: string; autonomy: string; maxSessions: number };
@@ -23,6 +26,7 @@ interface Stored {
 
 const defaultStored = (): Stored => ({
   allowedExecs: [...KNOWN_EXECS],
+  customModels: [],
   autopilot: { model: DEFAULT_CONFIG.autopilot.model, apiUrl: DEFAULT_CONFIG.autopilot.apiUrl, notes: '' },
   apiKey: null,
   defaults: { ...DEFAULT_CONFIG.defaults },
@@ -30,6 +34,7 @@ const defaultStored = (): Stored => ({
 
 export interface ConfigPatch {
   allowedExecs?: string[];
+  customModels?: { label: string; exec: string }[];
   autopilot?: { model?: string; apiUrl?: string; apiKey?: string; notes?: string };
   defaults?: { exec?: string; autonomy?: string; maxSessions?: number };
 }
@@ -45,6 +50,7 @@ export class ConfigStore {
       const d = defaultStored();
       return {
         allowedExecs: p.allowedExecs ?? d.allowedExecs,
+        customModels: p.customModels ?? [],
         autopilot: { model: p.autopilot?.model ?? d.autopilot.model, apiUrl: p.autopilot?.apiUrl ?? d.autopilot.apiUrl, notes: p.autopilot?.notes ?? d.autopilot.notes },
         apiKey: p.apiKey ?? null,
         defaults: { exec: p.defaults?.exec ?? d.defaults.exec, autonomy: p.defaults?.autonomy ?? d.defaults.autonomy, maxSessions: p.defaults?.maxSessions ?? d.defaults.maxSessions },
@@ -61,6 +67,7 @@ export class ConfigStore {
     const s = this.read();
     return {
       allowedExecs: s.allowedExecs,
+      customModels: s.customModels,
       autopilot: { model: s.autopilot.model, apiUrl: s.autopilot.apiUrl, apiKeySet: !!s.apiKey, notes: s.autopilot.notes },
       defaults: s.defaults,
     };
@@ -73,6 +80,7 @@ export class ConfigStore {
     const newKey = patch.autopilot?.apiKey;
     this.write({
       allowedExecs: patch.allowedExecs ?? cur.allowedExecs,
+      customModels: patch.customModels ?? cur.customModels,
       autopilot: { model: patch.autopilot?.model ?? cur.autopilot.model, apiUrl: patch.autopilot?.apiUrl ?? cur.autopilot.apiUrl, notes: patch.autopilot?.notes ?? cur.autopilot.notes },
       apiKey: (typeof newKey === 'string' && newKey.length > 0) ? newKey : cur.apiKey,
       defaults: { exec: patch.defaults?.exec ?? cur.defaults.exec, autonomy: patch.defaults?.autonomy ?? cur.defaults.autonomy, maxSessions: patch.defaults?.maxSessions ?? cur.defaults.maxSessions },
