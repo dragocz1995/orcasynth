@@ -221,3 +221,11 @@ it('without a UserStore, routes are open (legacy mode)', async () => {
   const { app } = makeApp();
   expect((await app.request('/tasks')).status).toBe(200);
 });
+
+it('PATCH /tasks/:id sets the exec label', async () => {
+  const { app } = makeApp();
+  await app.request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'orca-e', project_id: 1, title: 'E' }) });
+  const res = await app.request('/tasks/orca-e', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ exec: 'sonnet' }) });
+  expect(res.status).toBe(200);
+  expect((await res.json()).labels).toContain('exec:sonnet');
+});

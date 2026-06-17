@@ -40,4 +40,14 @@ describe('TaskStore', () => {
     expect(store.depsAmong(['a', 'b'])).toEqual([{ task_id: 'b', depends_on_id: 'a' }]);
     expect(store.depsAmong([])).toEqual([]);
   });
+
+  it('setExec sets, replaces and clears the exec label, preserving others', () => {
+    store.create({ id: 'x', project_id: 1, title: 'X', labels: ['area:ui'] });
+    store.setExec('x', 'sonnet');
+    expect(store.get('x')?.labels).toEqual(['area:ui', 'exec:sonnet']);
+    store.setExec('x', 'codex:gpt-5.4');
+    expect(store.get('x')?.labels).toEqual(['area:ui', 'exec:codex:gpt-5.4']);
+    store.setExec('x', '');
+    expect(store.get('x')?.labels).toEqual(['area:ui']);
+  });
 });

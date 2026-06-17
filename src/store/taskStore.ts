@@ -47,6 +47,14 @@ export class TaskStore {
     return rows.map(toTask);
   }
 
+  setExec(id: string, exec: string): void {
+    const t = this.get(id);
+    if (!t) return;
+    const labels = t.labels.filter((l) => !l.startsWith('exec:'));
+    if (exec) labels.push(`exec:${exec}`);
+    this.db.prepare('UPDATE tasks SET labels = ? WHERE id = ?').run(labels.join(','), id);
+  }
+
   depsAmong(ids: string[]): { task_id: string; depends_on_id: string }[] {
     if (ids.length === 0) return [];
     const placeholders = ids.map(() => '?').join(',');

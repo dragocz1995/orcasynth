@@ -69,7 +69,13 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     return c.json(created, 201);
   });
   app.get('/tasks/ready', c => c.json(d.readiness.ready(1)));
-  app.patch('/tasks/:id', async c => { const b = await c.req.json(); const id = c.req.param('id'); if (b.status) { d.tasks.setStatus(id, b.status); d.bus.publish({ type: 'task', taskId: id, status: b.status }); } return c.json(d.tasks.get(id)); });
+  app.patch('/tasks/:id', async c => {
+    const b = await c.req.json();
+    const id = c.req.param('id');
+    if (b.status) { d.tasks.setStatus(id, b.status); d.bus.publish({ type: 'task', taskId: id, status: b.status }); }
+    if (typeof b.exec === 'string') { d.tasks.setExec(id, b.exec); }
+    return c.json(d.tasks.get(id));
+  });
 
   app.get('/sessions', async c => c.json(await d.tmux.list()));
   app.post('/sessions', async (c) => {
