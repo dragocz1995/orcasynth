@@ -5,7 +5,7 @@
   "engines": { "node": ">=22" },
   "bin": { "orca": "./dist/cli/index.js" },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && cp src/store/schema.sql dist/store/",
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "node --experimental-strip-types src/daemon/index.ts"
