@@ -12,5 +12,6 @@ export function openDb(path: string): Db {
   const db = new Database(path);
   db.pragma('journal_mode = WAL');
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf-8'));
+  try { db.exec("ALTER TABLE projects ADD COLUMN notes TEXT NOT NULL DEFAULT ''"); } catch { /* column already exists */ }
   return db;
 }

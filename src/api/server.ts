@@ -19,6 +19,8 @@ import { assembleMissionDetail } from '../store/missionDetail.js';
 import type { UserStore, User } from '../store/userStore.js';
 import { authMiddleware } from './auth.js';
 import type { EventStore } from '../store/eventStore.js';
+import type { ProjectStore } from '../store/projectStore.js';
+import type { GitReader } from '../git/gitReader.js';
 
 
 export interface ServerDeps {
@@ -30,12 +32,29 @@ export interface ServerDeps {
   config: ConfigStore;
   users?: UserStore;
   events?: EventStore;
+  projects?: ProjectStore;
+  git?: GitReader;
 }
 
 export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; token: string } }> {
   const app = new Hono<{ Variables: { user: User; token: string } }>();
   app.use('*', cors());
   app.get('/health', c => c.json({ ok: true }));
+
+  app.get('/projects', (c) => c.json(d.projects ? d.projects.list() : []));
+  app.post('/projects', async (c) => {
+    if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);
+    const { slug, path, notes } = await c.req.json();
+    try { return c.json(d.projects.create({ slug, path, notes }), 201); }
+    catch { return c.json({ error: 'slug taken' }, 409); }
+  });
+  app.get('/projects/:id/git', async (c) => {
+    if (!d.projects || !d.git) return c.json({ error: 'projects unavailable' }, 400);
+    const p = d.projects.get(Number(c.req.param('id')));
+    if (!p) return c.json({ error: 'project not found' }, 404);
+    return c.json(await d.git.read(p.path));
+  });
+
   app.get('/activity', (c) => {
     if (!d.events) return c.json([]);
     const limit = Number(c.req.query('limit')) || undefined;

@@ -13,6 +13,8 @@ import { SystemClock } from '../shared/clock.js';
 import { ConfigStore } from '../store/configStore.js';
 import { UserStore } from '../store/userStore.js';
 import { EventStore } from '../store/eventStore.js';
+import { ProjectStore } from '../store/projectStore.js';
+import { RealGitReader } from '../git/gitReader.js';
 import type { TmuxDriver } from '../tmux/types.js';
 
 export interface BuildOpts {
@@ -39,6 +41,8 @@ export function buildApp(opts: BuildOpts) {
   } else if (users.count() === 0) {
     console.warn('[orca] no users exist and no ORCA_BOOTSTRAP_USER/PASS set — login will be impossible until a user is seeded');
   }
+  const projects = new ProjectStore(db);
+  const git = new RealGitReader();
   const spawn = new SpawnService({ tmux, agents });
   const bus = new EventBus();
   const events = new EventStore(db);
@@ -50,7 +54,7 @@ export function buildApp(opts: BuildOpts) {
   if (openMode) {
     console.warn('[orca] running OPEN (no auth) — ORCA_ALLOW_OPEN is set and no users exist');
   }
-  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users: openMode ? undefined : users });
+  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users: openMode ? undefined : users, projects, git });
 
   const startLoops = () => {
     const clock = new SystemClock();
