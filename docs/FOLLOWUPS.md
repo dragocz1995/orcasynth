@@ -38,3 +38,7 @@ Task 17 scoped a subset. Spec §5 also lists: `GET /tasks/:id/tree`, `POST /task
 `GET/POST /agents`, `GET /projects`, `POST /sessions` (spawn), `PATCH /missions/:id`
 (pause/resume). Add as the CLI/frontend needs them; `POST /tasks/:id/deps` is the most useful
 (currently deps are only settable via the internal `TaskStore.addDep`).
+
+## Web shell (#2) deferred
+
+- Explicit SSE reconnect backoff (spec §8) — relying on native EventSource auto-reconnect for now.

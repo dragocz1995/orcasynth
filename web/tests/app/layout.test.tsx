@@ -7,7 +7,7 @@ import { Shell } from '../../components/shell/Shell';
 vi.mock('next/navigation', () => ({ usePathname: () => '/' }));
 
 class FakeES {
-  onmessage = null;
+  addEventListener() {}
   close() {}
   constructor(public url: string) {}
 }

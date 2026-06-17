@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
 import type { TaskStore } from '../store/taskStore.js';
 import type { Readiness } from '../store/readiness.js';
@@ -15,6 +16,7 @@ export interface ServerDeps {
 
 export function createServer(d: ServerDeps): Hono {
   const app = new Hono();
+  app.use('*', cors());
   app.get('/health', c => c.json({ ok: true }));
 
   app.get('/tasks', c => c.json(d.tasks.list()));

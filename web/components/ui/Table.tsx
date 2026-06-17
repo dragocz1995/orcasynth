@@ -17,5 +17,5 @@ export function TH({ children, ...rest }: { children: ReactNode } & ThHTMLAttrib
 }
 
 export function TD({ children, mono = false, ...rest }: { children: ReactNode; mono?: boolean } & TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={`px-3 py-2 ${mono ? 'font-mono text-text-muted' : ''}`} {...rest}>{children}</td>;
+  return <td className={`px-3 py-2${mono ? ' font-mono text-text-muted' : ''}`} {...rest}>{children}</td>;
 }

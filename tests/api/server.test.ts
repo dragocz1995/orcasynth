@@ -22,6 +22,11 @@ describe('api', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
+  it('GET /health includes CORS header', async () => {
+    const { app } = makeApp();
+    const res = await app.request('/health', { headers: { origin: 'http://localhost:3000' } });
+    expect(res.headers.get('access-control-allow-origin')).toBeTruthy();
+  });
   it('POST /tasks creates and GET /tasks lists it', async () => {
     const { app } = makeApp();
     await app.request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'orca-1', project_id: 1, title: 'X' }) });

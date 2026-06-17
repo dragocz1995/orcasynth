@@ -6,15 +6,22 @@ import { useOrcaEvents } from '../../lib/useOrcaEvents';
 
 class FakeES {
   static last: FakeES;
-  onmessage: ((e: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   closed = false;
+  private listeners = new Map<string, ((e: { data: string }) => void)[]>();
   constructor(public url: string) { FakeES.last = this; }
+  addEventListener(type: string, fn: (e: { data: string }) => void) {
+    const existing = this.listeners.get(type) ?? [];
+    this.listeners.set(type, [...existing, fn]);
+  }
   close() { this.closed = true; }
-  emit(obj: unknown) { this.onmessage?.({ data: JSON.stringify(obj) }); }
+  emit(obj: Record<string, unknown>) {
+    const handlers = this.listeners.get(obj['type'] as string) ?? [];
+    for (const fn of handlers) fn({ data: JSON.stringify(obj) });
+  }
 }
 
-beforeEach(() => { (globalThis as any).EventSource = FakeES as any; });
+beforeEach(() => { (globalThis as unknown as { EventSource: unknown }).EventSource = FakeES; });
 
 function wrap() {
   const client = new QueryClient();
@@ -29,7 +36,11 @@ describe('useOrcaEvents', () => {
     renderHook(() => useOrcaEvents(), { wrapper });
     FakeES.last.emit({ type: 'task', taskId: 'orca-1', status: 'closed' });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['tasks'] });
-    FakeES.last.onmessage?.({ data: 'not json' }); // must not throw
+    // malformed payload — must not throw, must be silently skipped
+    FakeES.last.addEventListener('task', () => { /* no-op listener to ensure no throw */ });
+    const fakeHandler = FakeES.last['listeners' as keyof FakeES] as unknown as Map<string, ((e: { data: string }) => void)[]>;
+    const taskHandlers = fakeHandler.get('task') ?? [];
+    expect(() => taskHandlers[0]?.({ data: 'not json' })).not.toThrow();
   });
   it('closes the source on unmount', () => {
     const { wrapper } = wrap();
