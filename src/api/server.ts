@@ -41,27 +41,6 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
   app.use('*', cors());
   app.get('/health', c => c.json({ ok: true }));
 
-  app.get('/projects', (c) => c.json(d.projects ? d.projects.list() : []));
-  app.post('/projects', async (c) => {
-    if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);
-    const { slug, path, notes } = await c.req.json();
-    try { return c.json(d.projects.create({ slug, path, notes }), 201); }
-    catch { return c.json({ error: 'slug taken' }, 409); }
-  });
-  app.get('/projects/:id/git', async (c) => {
-    if (!d.projects || !d.git) return c.json({ error: 'projects unavailable' }, 400);
-    const p = d.projects.get(Number(c.req.param('id')));
-    if (!p) return c.json({ error: 'project not found' }, 404);
-    return c.json(await d.git.read(p.path));
-  });
-
-  app.get('/activity', (c) => {
-    if (!d.events) return c.json([]);
-    const limit = Number(c.req.query('limit')) || undefined;
-    const type = c.req.query('type') || undefined;
-    return c.json(d.events.list({ limit, type }));
-  });
-
   if (d.users) {
     const users = d.users;
     app.use('*', authMiddleware(users));
@@ -86,6 +65,27 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       return c.json({ ok: true });
     });
   }
+
+  app.get('/projects', (c) => c.json(d.projects ? d.projects.list() : []));
+  app.post('/projects', async (c) => {
+    if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);
+    const { slug, path, notes } = await c.req.json();
+    try { return c.json(d.projects.create({ slug, path, notes }), 201); }
+    catch { return c.json({ error: 'slug taken' }, 409); }
+  });
+  app.get('/projects/:id/git', async (c) => {
+    if (!d.projects || !d.git) return c.json({ error: 'projects unavailable' }, 400);
+    const p = d.projects.get(Number(c.req.param('id')));
+    if (!p) return c.json({ error: 'project not found' }, 404);
+    return c.json(await d.git.read(p.path));
+  });
+
+  app.get('/activity', (c) => {
+    if (!d.events) return c.json([]);
+    const limit = Number(c.req.query('limit')) || undefined;
+    const type = c.req.query('type') || undefined;
+    return c.json(d.events.list({ limit, type }));
+  });
 
   app.get('/tasks', c => c.json(d.tasks.list()));
   app.post('/tasks', async c => {

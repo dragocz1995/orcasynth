@@ -36,6 +36,10 @@ describe('auth', () => {
   it('protects routes: 401 without token, 200 with Bearer and with ?token=', async () => {
     const { app } = makeAuthedApp();
     expect((await app.request('/tasks')).status).toBe(401);
+    // /projects (incl. mutating POST + git shell-out) and /activity must be gated too
+    expect((await app.request('/projects')).status).toBe(401);
+    expect((await app.request('/projects', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(401);
+    expect((await app.request('/activity')).status).toBe(401);
     const login = await (await app.request('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'alice', password: 'secret' }) })).json();
     const t = login.token as string;
     expect((await app.request('/tasks', { headers: { authorization: `Bearer ${t}` } })).status).toBe(200);
