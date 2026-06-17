@@ -13,6 +13,7 @@ import type { EventBus } from './sse.js';
 import type { AgentSpec } from '../spawn/commandBuilder.js';
 import { resolveExecutor } from '../overseer/routing.js';
 import { uniqueName } from '../daemon/uniqueName.js';
+import type { Clock } from '../shared/clock.js';
 
 const ALLOWED_EXEC = new Set(['sonnet', 'ollama/deepseek-v4-flash', 'ollama/kimi-k2.7-code', 'ollama/minimax-m2.7', 'codex:gpt-5.4']);
 
@@ -21,6 +22,7 @@ export interface ServerDeps {
   engine: MissionEngine; spawn: SpawnService; tmux: TmuxDriver; bus: EventBus;
   project: { id: number; path: string };
   fallback: AgentSpec;
+  clock: Clock;
 }
 
 export function createServer(d: ServerDeps): Hono {
@@ -52,6 +54,21 @@ export function createServer(d: ServerDeps): Hono {
   app.delete('/sessions/:name', async c => { await d.tmux.kill(c.req.param('name')); return c.json({ ok: true }); });
   app.post('/sessions/:name/keys', async c => { const { keys } = await c.req.json(); await d.tmux.sendKeys(c.req.param('name'), keys); return c.json({ ok: true }); });
   app.get('/sessions/:name/pane', async c => c.json({ pane: await d.tmux.capturePane(c.req.param('name'), 60) }));
+
+  app.get('/sessions/:name/stream', (c) => {
+    const name = c.req.param('name');
+    return streamSSE(c, async (stream) => {
+      const frame = async () => {
+        const pane = await d.tmux.capturePaneAnsi(name, 200);
+        await stream.writeSSE({ data: JSON.stringify({ pane }), event: 'pane' });
+      };
+      await frame(); // first frame synchronously so clients render immediately
+      const stop = d.clock.setInterval(() => { void frame(); }, 1000);
+      c.req.raw.signal.addEventListener('abort', stop);
+      while (!c.req.raw.signal.aborted) await stream.sleep(1000);
+      stop();
+    });
+  });
 
   app.get('/missions', c => c.json(d.missions.active()));
   app.post('/missions', async c => { const b = await c.req.json(); return c.json(await d.engine.engage(b), 201); });
