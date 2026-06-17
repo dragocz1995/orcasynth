@@ -16,6 +16,8 @@ import { uniqueName } from '../daemon/uniqueName.js';
 import type { Clock } from '../shared/clock.js';
 import type { ConfigStore } from '../store/configStore.js';
 import { assembleMissionDetail } from '../store/missionDetail.js';
+import type { UserStore, User } from '../store/userStore.js';
+import { authMiddleware } from './auth.js';
 
 
 export interface ServerDeps {
@@ -25,12 +27,38 @@ export interface ServerDeps {
   fallback: AgentSpec;
   clock: Clock;
   config: ConfigStore;
+  users?: UserStore;
 }
 
-export function createServer(d: ServerDeps): Hono {
-  const app = new Hono();
+export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; token: string } }> {
+  const app = new Hono<{ Variables: { user: User; token: string } }>();
   app.use('*', cors());
   app.get('/health', c => c.json({ ok: true }));
+
+  if (d.users) {
+    const users = d.users;
+    app.use('*', authMiddleware(users));
+
+    app.post('/auth/login', async (c) => {
+      const { username, password } = await c.req.json();
+      const user = users.verify(username, password);
+      if (!user) return c.json({ error: 'invalid credentials' }, 401);
+      return c.json({ token: users.issueToken(user.id), user });
+    });
+    app.post('/auth/logout', (c) => { const t = c.get('token'); if (t) users.revokeToken(t); return c.json({ ok: true }); });
+    app.get('/auth/me', (c) => c.json({ user: c.get('user') }));
+    app.get('/users', (c) => c.json(users.list()));
+    app.post('/users', async (c) => {
+      const { username, password } = await c.req.json();
+      try { return c.json(users.create(username, password), 201); }
+      catch { return c.json({ error: 'username taken' }, 409); }
+    });
+    app.delete('/users/:id', (c) => {
+      if (users.count() <= 1) return c.json({ error: 'cannot delete the last user' }, 400);
+      users.delete(Number(c.req.param('id')));
+      return c.json({ ok: true });
+    });
+  }
 
   app.get('/tasks', c => c.json(d.tasks.list()));
   app.post('/tasks', async c => {

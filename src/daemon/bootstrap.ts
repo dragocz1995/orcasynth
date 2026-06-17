@@ -11,6 +11,7 @@ import { createServer } from '../api/server.js';
 import { RealTmuxDriver } from '../tmux/driver.js';
 import { SystemClock } from '../shared/clock.js';
 import { ConfigStore } from '../store/configStore.js';
+import { UserStore } from '../store/userStore.js';
 import type { TmuxDriver } from '../tmux/types.js';
 
 export interface BuildOpts {
@@ -18,6 +19,7 @@ export interface BuildOpts {
   project: { id: number; slug: string; path: string };
   relay: { baseUrl: string; apiKey: string; model: string } | null;
   tmux?: TmuxDriver;
+  bootstrap?: { username: string; password: string } | null;
 }
 
 export function buildApp(opts: BuildOpts) {
@@ -27,12 +29,21 @@ export function buildApp(opts: BuildOpts) {
   const tasks = new TaskStore(db); const agents = new AgentStore(db);
   const missions = new MissionStore(db); const readiness = new Readiness(db);
   const config = new ConfigStore(db);
+  const users = new UserStore(db);
+  if (opts.bootstrap != null) {
+    if (users.count() === 0) {
+      users.create(opts.bootstrap.username, opts.bootstrap.password);
+    }
+  } else if (users.count() === 0) {
+    console.warn('[orca] no users exist and no ORCA_BOOTSTRAP_USER/PASS set — login will be impossible until a user is seeded');
+  }
   const spawn = new SpawnService({ tmux, agents });
   const bus = new EventBus();
   const engine = new MissionEngine({ tasks, readiness, missions, spawn, tmux, bus, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: () => `Agent${Math.floor(performance.now()) % 9999}` });
   // Deriver resolves a session's task via the agent registry / in-progress task (simplified: first in_progress child).
   const deriver = new Deriver({ tmux, agents, tasks, sink: bus, clock: new SystemClock(), sessionTaskId: () => tasks.list({ status: 'in_progress' })[0]?.id ?? null });
-  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config });
+  const serverUsers = users.count() > 0 ? users : undefined;
+  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users: serverUsers });
 
   const startLoops = () => {
     const clock = new SystemClock();

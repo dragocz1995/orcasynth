@@ -216,3 +216,8 @@ it('GET /config returns masked config; PUT updates without exposing the key', as
   expect(get.autopilot.apiKeySet).toBe(true);
   expect(JSON.stringify(get)).not.toContain('sk-secret');
 });
+
+it('without a UserStore, routes are open (legacy mode)', async () => {
+  const { app } = makeApp();
+  expect((await app.request('/tasks')).status).toBe(200);
+});
