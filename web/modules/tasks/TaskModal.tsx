@@ -38,6 +38,7 @@ export function TaskModal({ task, onClose }: { task?: Task; onClose: () => void 
 
   // Single-task fields
   const [title, setTitle] = useState(task?.title ?? '');
+  const [description, setDescription] = useState(task?.description ?? '');
   const [type, setType] = useState(task?.type ?? 'task');
   const [priority, setPriority] = useState(task?.priority ?? 'P2');
   const [exec, setExec] = useState(task ? taskExec(task.labels) : '');
@@ -58,11 +59,11 @@ export function TaskModal({ task, onClose }: { task?: Task; onClose: () => void 
     if (!title.trim()) return;
     try {
       if (editing) {
-        await update.mutateAsync({ id: task!.id, patch: { title: title.trim(), type, priority } });
+        await update.mutateAsync({ id: task!.id, patch: { title: title.trim(), type, priority, description: description.trim() } });
         if (exec !== taskExec(task!.labels)) await setExecM.mutateAsync({ id: task!.id, exec });
         toast(`Updated ${task!.id}`);
       } else {
-        const created = await create.mutateAsync({ title: title.trim(), type, priority });
+        const created = await create.mutateAsync({ title: title.trim(), type, priority, description: description.trim() });
         if (exec) await setExecM.mutateAsync({ id: created.id, exec });
         if (launchNow) await spawn.mutateAsync({ taskId: created.id, exec: exec || undefined });
         toast(launchNow ? `Created & launched ${created.title}` : `Created ${created.title}`);
@@ -131,6 +132,15 @@ export function TaskModal({ task, onClose }: { task?: Task; onClose: () => void 
           <>
             <Field label="Title">
               <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What needs doing?" autoFocus />
+            </Field>
+            <Field label="Details" hint="Context handed to the agent — what to build, constraints, acceptance.">
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Describe the task so the agent knows exactly what to do…"
+                rows={4}
+                className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
+              />
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label="Type">

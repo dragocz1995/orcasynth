@@ -31,6 +31,11 @@ describe('buildAgentCommand', () => {
     const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-9', agentName: 'A' });
     expect(cmd).toContain('orca close orca-9');
   });
+  it('injects the task title and description into the agent prompt', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', taskTitle: 'Add CSV export', taskDescription: 'Use a button on the reports page' });
+    expect(cmd).toContain('Add CSV export');
+    expect(cmd).toContain('Use a button on the reports page');
+  });
   it('uses the configured provider binary and extra args', () => {
     const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', bin: '/opt/oc/opencode', extraArgs: '--pure' });
     expect(cmd).toContain('/opt/oc/opencode run --model m --pure ');

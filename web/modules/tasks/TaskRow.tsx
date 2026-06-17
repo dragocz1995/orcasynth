@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { Pencil, Play, Archive, Trash2 } from 'lucide-react';
+import { Pencil, Play, Archive, Trash2, Clock } from 'lucide-react';
 import type { Task } from '../../lib/types';
 import { useSpawn, useCloseTask, useDeleteTask } from '../../lib/mutations';
 import { taskExec } from '../../lib/taskExec';
@@ -10,6 +10,12 @@ import { ActionMenu } from '../../components/ui/ActionMenu';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useToast } from '../../components/ui/Toast';
 import { taskTypeMeta } from './taskMeta';
+
+function fmtSchedule(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 export function TaskRow({ task, onEdit }: { task: Task; onEdit: (t: Task) => void }) {
   const spawn = useSpawn();
@@ -21,34 +27,54 @@ export function TaskRow({ task, onEdit }: { task: Task; onEdit: (t: Task) => voi
   const meta = taskTypeMeta(task.type);
   const Icon = meta.icon;
   const exec = taskExec(task.labels);
+  const preview = task.description?.trim() || 'No details yet — click to add context for the agent.';
 
   return (
-    <div className="group flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-      <Icon size={16} className="shrink-0 text-text-muted" aria-hidden />
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onEdit(task)}
+      onKeyDown={(e) => { if (e.key === 'Enter') onEdit(task); }}
+      className="group -mx-2 flex cursor-pointer items-start gap-3 rounded-lg px-2 py-3 transition-colors hover:bg-elevated/50"
+    >
+      <Icon size={16} className="mt-0.5 shrink-0 text-text-muted" aria-hidden />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm text-text">{task.title}</div>
-        <div className="font-mono text-[11px] text-text-muted">{task.id}</div>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium text-text">{task.title}</span>
+          <span className="shrink-0 font-mono text-[11px] text-text-muted">{task.id}</span>
+        </div>
+        <div className={`mt-0.5 truncate text-xs ${task.description?.trim() ? 'text-text-muted' : 'text-text-muted/60 italic'}`}>{preview}</div>
       </div>
-      {exec ? <Badge>{exec}</Badge> : null}
-      <Badge tone={task.status === 'in_progress' ? 'accent' : 'default'}>{task.status}</Badge>
-      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <IconButton icon={Pencil} label="Edit" onClick={() => onEdit(task)} />
-        <IconButton icon={Play} label="Launch" onClick={() => spawn.mutate({ taskId: task.id, exec: exec || undefined }, { onSuccess: (r) => toast(`Launched ${r.session}`), onError: (e) => toast(String(e), 'error') })} />
-        <ActionMenu
-          label="Delete or close"
-          items={[
-            { label: 'Close (archive)', icon: Archive, onSelect: () => close.mutate(task.id, { onSuccess: () => toast(`Closed ${task.id}`), onError: (e) => toast(String(e), 'error') }) },
-            { label: 'Delete permanently', icon: Trash2, tone: 'danger', onSelect: () => setConfirmDelete(true) },
-          ]}
-        />
+      <div className="flex shrink-0 items-center gap-2 pt-0.5">
+        {task.scheduled_at ? <Badge tone="muted"><Clock size={11} className="mr-1 inline" aria-hidden />{fmtSchedule(task.scheduled_at)}</Badge> : null}
+        {exec ? <Badge>{exec}</Badge> : null}
+        <Badge tone={task.status === 'in_progress' ? 'accent' : 'default'}>{task.status}</Badge>
+        <div
+          className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <IconButton icon={Pencil} label="Edit" onClick={() => onEdit(task)} />
+          <IconButton icon={Play} label="Launch" onClick={() => spawn.mutate({ taskId: task.id, exec: exec || undefined }, { onSuccess: (r) => toast(`Launched ${r.session}`), onError: (e) => toast(String(e), 'error') })} />
+          <ActionMenu
+            label="Delete or close"
+            items={[
+              { label: 'Close (archive)', icon: Archive, onSelect: () => close.mutate(task.id, { onSuccess: () => toast(`Closed ${task.id}`), onError: (e) => toast(String(e), 'error') }) },
+              { label: 'Delete permanently', icon: Trash2, tone: 'danger', onSelect: () => setConfirmDelete(true) },
+            ]}
+          />
+        </div>
       </div>
-      <ConfirmDialog
-        open={confirmDelete}
-        title={`Delete ${task.id}?`}
-        description="This permanently removes the task and its dependency links."
-        onClose={() => setConfirmDelete(false)}
-        onConfirm={() => { setConfirmDelete(false); del.mutate(task.id, { onSuccess: () => toast(`Deleted ${task.id}`), onError: (e) => toast(String(e), 'error') }); }}
-      />
+      {confirmDelete && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <ConfirmDialog
+            open={confirmDelete}
+            title={`Delete ${task.id}?`}
+            description="This permanently removes the task and its dependency links."
+            onClose={() => setConfirmDelete(false)}
+            onConfirm={() => { setConfirmDelete(false); del.mutate(task.id, { onSuccess: () => toast(`Deleted ${task.id}`), onError: (e) => toast(String(e), 'error') }); }}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -245,6 +245,15 @@ it('PATCH /tasks/:id updates title, type and priority', async () => {
   expect(t.title).toBe('New'); expect(t.type).toBe('bug'); expect(t.priority).toBe('P0');
 });
 
+it('POST /tasks persists a description and PATCH updates it', async () => {
+  const { app } = makeApp();
+  const post = await app.request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ title: 'X', description: 'do the thing' }) });
+  const created = await post.json() as { id: string; description: string };
+  expect(created.description).toBe('do the thing');
+  const patch = await app.request(`/tasks/${created.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description: 'changed' }) });
+  expect((await patch.json()).description).toBe('changed');
+});
+
 it('DELETE /tasks/:id removes the task and publishes a cancelled event', async () => {
   const { app, bus } = makeApp();
   const events: OrcaEvent[] = []; bus.subscribe(e => events.push(e));

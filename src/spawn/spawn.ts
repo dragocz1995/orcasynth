@@ -9,7 +9,7 @@ export type ProviderResolver = (program: string) => { bin?: string; args?: strin
 
 export class SpawnService {
   constructor(private d: { tmux: TmuxDriver; agents: AgentStore; orca?: OrcaCliConfig; providers?: ProviderResolver }) {}
-  async launch(input: { projectId: number; projectPath: string; taskId: string; agentName: string; spec: AgentSpec }): Promise<{ session: string }> {
+  async launch(input: { projectId: number; projectPath: string; taskId: string; agentName: string; spec: AgentSpec; taskTitle?: string; taskDescription?: string }): Promise<{ session: string }> {
     this.d.agents.upsert({ project_id: input.projectId, name: input.agentName, program: input.spec.program, model: input.spec.model });
     const session = `orca-${input.agentName}`;
     const orca = this.d.orca;
@@ -18,6 +18,7 @@ export class SpawnService {
     const provider = this.d.providers?.(input.spec.program);
     const command = buildAgentCommand(input.spec, {
       projectPath: input.projectPath, taskId: input.taskId, agentName: input.agentName,
+      taskTitle: input.taskTitle, taskDescription: input.taskDescription,
       closeCommand, env, bin: provider?.bin, extraArgs: provider?.args,
     });
     await this.d.tmux.spawn(session, { cwd: input.projectPath, command });

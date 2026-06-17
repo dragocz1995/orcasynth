@@ -13,5 +13,7 @@ export function openDb(path: string): Db {
   db.pragma('journal_mode = WAL');
   db.exec(readFileSync(join(here, 'schema.sql'), 'utf-8'));
   try { db.exec("ALTER TABLE projects ADD COLUMN notes TEXT NOT NULL DEFAULT ''"); } catch { /* column already exists */ }
+  try { db.exec("ALTER TABLE tasks ADD COLUMN description TEXT NOT NULL DEFAULT ''"); } catch { /* column already exists */ }
+  try { db.exec("ALTER TABLE tasks ADD COLUMN scheduled_at TEXT"); } catch { /* column already exists */ }
   return db;
 }

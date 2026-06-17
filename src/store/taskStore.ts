@@ -8,12 +8,13 @@ export class TaskStore {
   constructor(private db: Db) {}
   create(input: CreateTaskInput): Task {
     this.db.prepare(
-      `INSERT INTO tasks (id, project_id, title, type, priority, parent_id, labels)
-       VALUES (@id, @project_id, @title, @type, @priority, @parent_id, @labels)`
+      `INSERT INTO tasks (id, project_id, title, type, priority, parent_id, labels, description, scheduled_at)
+       VALUES (@id, @project_id, @title, @type, @priority, @parent_id, @labels, @description, @scheduled_at)`
     ).run({
       id: input.id, project_id: input.project_id, title: input.title,
       type: input.type ?? 'task', priority: input.priority ?? 'P2',
       parent_id: input.parent_id ?? null, labels: (input.labels ?? []).join(','),
+      description: input.description ?? '', scheduled_at: input.scheduled_at ?? null,
     });
     return this.get(input.id)!;
   }
@@ -32,11 +33,13 @@ export class TaskStore {
     this.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(status, id);
   }
 
-  update(id: string, patch: { title?: string; type?: string; priority?: string }): Task | null {
+  update(id: string, patch: { title?: string; type?: string; priority?: string; description?: string; scheduled_at?: string | null }): Task | null {
     const sets: string[] = []; const p: Record<string, unknown> = { id };
     if (typeof patch.title === 'string') { sets.push('title = @title'); p.title = patch.title; }
     if (typeof patch.type === 'string') { sets.push('type = @type'); p.type = patch.type; }
     if (typeof patch.priority === 'string') { sets.push('priority = @priority'); p.priority = patch.priority; }
+    if (typeof patch.description === 'string') { sets.push('description = @description'); p.description = patch.description; }
+    if (patch.scheduled_at !== undefined) { sets.push('scheduled_at = @scheduled_at'); p.scheduled_at = patch.scheduled_at; }
     if (sets.length > 0) this.db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = @id`).run(p);
     return this.get(id);
   }

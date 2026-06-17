@@ -3,6 +3,9 @@ export interface SpawnCtx {
   projectPath: string;
   taskId: string;
   agentName: string;
+  /** Task title + details, injected into the agent prompt so it knows what to do. */
+  taskTitle?: string;
+  taskDescription?: string;
   /** Shell command the agent runs to close its task when done. Defaults to `orca close <id>`. */
   closeCommand?: string;
   /** Env vars exported before the agent starts (e.g. ORCA_URL/ORCA_TOKEN so the close command reaches the daemon). */
@@ -22,7 +25,9 @@ export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
     ? Object.entries(ctx.env).map(([k, v]) => `export ${k}=${esc(v)}`).join(' && ') + ' && '
     : '';
   const extra = ctx.extraArgs && ctx.extraArgs.trim() ? ` ${ctx.extraArgs.trim()}` : '';
-  const prompt = `You are the orca agent "${ctx.agentName}". Work task ${ctx.taskId}. When the work is complete, run: ${closeCommand}`;
+  const titlePart = ctx.taskTitle ? `: ${ctx.taskTitle}` : '';
+  const detailsPart = ctx.taskDescription && ctx.taskDescription.trim() ? `\n\nDetails:\n${ctx.taskDescription.trim()}` : '';
+  const prompt = `You are the orca agent "${ctx.agentName}". Work on task ${ctx.taskId}${titlePart}.${detailsPart}\n\nWhen the work is complete, run: ${closeCommand}`;
   if (spec.program.startsWith('opencode')) {
     const bin = ctx.bin || 'opencode';
     // `run` executes headless and exits when done (the interactive TUI via --prompt

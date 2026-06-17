@@ -94,9 +94,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
 
   app.get('/tasks', c => c.json(d.tasks.list()));
   app.post('/tasks', async c => {
-    const b = await c.req.json() as { title: string; type?: string; priority?: string; id?: string };
+    const b = await c.req.json() as { title: string; type?: string; priority?: string; id?: string; description?: string; scheduled_at?: string | null };
     const id = b.id ?? `${basename(d.project.path)}-${randomBytes(4).toString('hex')}`;
-    const created = d.tasks.create({ id, project_id: d.project.id, title: b.title, type: b.type, priority: b.priority });
+    const created = d.tasks.create({ id, project_id: d.project.id, title: b.title, type: b.type, priority: b.priority, description: b.description, scheduled_at: b.scheduled_at });
     d.bus.publish({ type: 'task', taskId: created.id, status: created.status });
     return c.json(created, 201);
   });
@@ -106,8 +106,8 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const id = c.req.param('id');
     if (b.status) { d.tasks.setStatus(id, b.status); d.bus.publish({ type: 'task', taskId: id, status: b.status }); }
     if (typeof b.exec === 'string') { d.tasks.setExec(id, b.exec); }
-    if (typeof b.title === 'string' || typeof b.type === 'string' || typeof b.priority === 'string') {
-      d.tasks.update(id, { title: b.title, type: b.type, priority: b.priority });
+    if (typeof b.title === 'string' || typeof b.type === 'string' || typeof b.priority === 'string' || typeof b.description === 'string' || b.scheduled_at !== undefined) {
+      d.tasks.update(id, { title: b.title, type: b.type, priority: b.priority, description: b.description, scheduled_at: b.scheduled_at });
     }
     return c.json(d.tasks.get(id));
   });
@@ -142,11 +142,12 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     }
 
     const newId = () => `${basename(d.project.path)}-${randomBytes(4).toString('hex')}`;
-    const epic = d.tasks.create({ id: newId(), project_id: d.project.id, title: goal, type: 'epic' });
+    const epic = d.tasks.create({ id: newId(), project_id: d.project.id, title: goal, type: 'epic', description: goal });
     d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
     const created: typeof epic[] = [];
     for (const ph of phases) {
-      const child = d.tasks.create({ id: newId(), project_id: d.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [] });
+      // Children carry the overall goal as context so each phase agent sees the bigger picture.
+      const child = d.tasks.create({ id: newId(), project_id: d.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: `Overall goal: ${goal}` });
       const prev = created[created.length - 1];
       if (prev) d.tasks.addDep(child.id, prev.id); // sequential: phase n depends on n-1
       if (b.exec) d.tasks.setExec(child.id, b.exec);
@@ -166,8 +167,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const { taskId, exec } = await c.req.json() as { taskId: string; exec?: string };
     if (exec && !d.config.get().allowedExecs.includes(exec)) return c.json({ error: 'exec not allowed' }, 400);
     const spec = resolveExecutor(exec ? [`exec:${exec}`] : [], d.fallback);
+    const task = d.tasks.get(taskId);
     d.tasks.setStatus(taskId, 'in_progress');
-    const { session } = await d.spawn.launch({ projectId: d.project.id, projectPath: d.project.path, taskId, agentName: uniqueName(), spec });
+    const { session } = await d.spawn.launch({ projectId: d.project.id, projectPath: d.project.path, taskId, agentName: uniqueName(), spec, taskTitle: task?.title, taskDescription: task?.description });
     d.bus.publish({ type: 'task', taskId, status: 'in_progress' });
     return c.json({ session }, 201);
   });

@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id TEXT PRIMARY KEY, project_id INTEGER NOT NULL, title TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'task', status TEXT NOT NULL DEFAULT 'open',
   priority TEXT NOT NULL DEFAULT 'P2', parent_id TEXT, labels TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '', scheduled_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE TABLE IF NOT EXISTS task_deps (task_id TEXT NOT NULL, depends_on_id TEXT NOT NULL, PRIMARY KEY (task_id, depends_on_id));
