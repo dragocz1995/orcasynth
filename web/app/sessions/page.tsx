@@ -13,8 +13,8 @@ import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states
 import { ModuleShell } from '../../components/shell/ModuleShell';
 
 // xterm references browser-only `self`; skip SSR to avoid prerender errors
-const Terminal = dynamic(
-  () => import('../../components/terminal/Terminal').then((m) => m.Terminal),
+const TerminalPanel = dynamic(
+  () => import('../../components/terminal/TerminalPanel').then((m) => m.TerminalPanel),
   { ssr: false },
 );
 
@@ -47,7 +47,7 @@ export default function SessionsPage() {
           ) : <EmptyState title="No live sessions" />}
         {openTerm && (
           <Modal title={`Terminal — ${openTerm}`} onClose={() => setOpenTerm(null)}>
-            <Terminal name={openTerm} />
+            <TerminalPanel name={openTerm} onKilled={() => setOpenTerm(null)} />
           </Modal>
         )}
       </Panel>
