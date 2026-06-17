@@ -58,6 +58,35 @@ describe('SettingsPage', () => {
       expect(body.customModels).toContainEqual({ label: 'My Custom Model', exec: 'my/custom' });
     });
   });
+
+  it('switches categories via the top pills', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
+    await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
+
+    // Models category is active by default; Autopilot save button is hidden
+    expect(screen.queryByRole('button', { name: 'Save autopilot' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+    expect(screen.getByRole('button', { name: 'Save autopilot' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Save models' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Defaults' }));
+    expect(screen.getByRole('button', { name: 'Save defaults' })).toBeTruthy();
+  });
+
+  it('opens the ConfirmDialog when deleting a custom model', async () => {
+    server.use(http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'my/custom'], customModels: [{ label: 'My Custom Model', exec: 'my/custom' }], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false, notes: '' }, defaults: { exec: 'sonnet', autonomy: 'L1', maxSessions: 1 } })));
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
+    await waitFor(() => expect(screen.getByLabelText('My Custom Model')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete my/custom' }));
+    expect(await screen.findByText(/Remove My Custom Model/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(screen.queryByLabelText('My Custom Model')).toBeNull());
+  });
 });
 
 const config = { allowedExecs: ['sonnet'], customModels: [], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false, notes: 'mind the guardrails' }, defaults: { exec: 'sonnet', autonomy: 'L3', maxSessions: 2 } };
@@ -67,8 +96,14 @@ describe('Settings depth', () => {
     server.use(http.get('*/config', () => HttpResponse.json(config)));
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
-    expect(await screen.findByDisplayValue('mind the guardrails')).toBeTruthy(); // notes textarea still present
-    expect(screen.getAllByRole('switch').length).toBeGreaterThan(0);            // model toggle cards
-    expect(screen.getAllByRole('radiogroup').length).toBeGreaterThan(0);        // defaults segmented (autonomy/exec)
+
+    // Models category is active by default
+    await waitFor(() => expect(screen.getAllByRole('switch').length).toBeGreaterThan(0)); // model toggle cards
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+    expect(screen.getByDisplayValue('mind the guardrails')).toBeTruthy();                 // notes textarea
+
+    fireEvent.click(screen.getByRole('button', { name: 'Defaults' }));
+    expect(screen.getAllByRole('radiogroup').length).toBeGreaterThan(0);                  // defaults segmented (autonomy/exec)
   });
 });

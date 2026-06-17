@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { plotAxis } from '../../../modules/timeline/axis';
+import { plotAxis, groupEvents } from '../../../modules/timeline/axis';
 
 const HOUR_MS = 3_600_000;
 // Fixed "now": 2026-06-17T12:00:00Z
@@ -72,6 +72,86 @@ describe('plotAxis', () => {
   it('preserves all event fields in the output point', () => {
     const e = { id: 'z', type: 'mission', target: 'my-target', detail: 'active', timestamp: NOW - HOUR_MS };
     const { points } = plotAxis([e], NOW, HOURS);
-    expect(points[0]).toMatchObject({ id: 'z', type: 'mission', target: 'my-target', detail: 'active' });
+    expect(points[0]).toMatchObject({ id: 'z', type: 'mission', target: 'my-target', detail: 'active', count: 1 });
+  });
+
+  it('collapses a flood of identical signals into one point with a count', () => {
+    // 5 "working" signals 5s apart — should render as a single marker ×5.
+    const flood = Array.from({ length: 5 }, (_, i) => ({
+      id: `s${i}`,
+      type: 'signal',
+      target: 'agent-1',
+      detail: 'working',
+      timestamp: NOW - HOUR_MS + i * 5_000,
+    }));
+    const { points } = plotAxis(flood, NOW, HOURS);
+    expect(points).toHaveLength(1);
+    expect(points[0].count).toBe(5);
+  });
+});
+
+describe('groupEvents', () => {
+  const sig = (id: string, target: string, detail: string, timestamp: number) => ({
+    id,
+    type: 'signal',
+    target,
+    detail,
+    timestamp,
+  });
+
+  it('collapses consecutive identical events into one with a count', () => {
+    const events = [
+      sig('a', 'agent-1', 'working', NOW),
+      sig('b', 'agent-1', 'working', NOW + 5_000),
+      sig('c', 'agent-1', 'working', NOW + 10_000),
+    ];
+    const groups = groupEvents(events);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(3);
+    expect(groups[0].firstTimestamp).toBe(NOW);
+    expect(groups[0].timestamp).toBe(NOW + 10_000); // keeps latest timestamp
+    expect(groups[0].id).toBe('c'); // keeps latest id
+  });
+
+  it('keeps distinct events separate', () => {
+    const events = [
+      sig('a', 'agent-1', 'working', NOW),
+      sig('b', 'agent-2', 'working', NOW + 5_000),
+      sig('c', 'agent-1', 'idle', NOW + 10_000),
+    ];
+    const groups = groupEvents(events);
+    expect(groups).toHaveLength(3);
+    expect(groups.every((g) => g.count === 1)).toBe(true);
+  });
+
+  it('does not merge identical events separated by a large gap', () => {
+    const events = [
+      sig('a', 'agent-1', 'working', NOW),
+      sig('b', 'agent-1', 'working', NOW + 30 * 60 * 1000), // 30 min later
+    ];
+    const groups = groupEvents(events);
+    expect(groups).toHaveLength(2);
+  });
+
+  it('sorts unordered input by timestamp before grouping', () => {
+    const events = [
+      sig('b', 'agent-1', 'working', NOW + 5_000),
+      sig('a', 'agent-1', 'working', NOW),
+      sig('c', 'agent-1', 'working', NOW + 10_000),
+    ];
+    const groups = groupEvents(events);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].count).toBe(3);
+  });
+
+  it('does not mutate the input array', () => {
+    const events = [sig('a', 'agent-1', 'working', NOW + 5_000), sig('b', 'agent-1', 'working', NOW)];
+    const snapshot = events.map((e) => e.id);
+    groupEvents(events);
+    expect(events.map((e) => e.id)).toEqual(snapshot);
+  });
+
+  it('returns empty for empty input', () => {
+    expect(groupEvents([])).toEqual([]);
   });
 });

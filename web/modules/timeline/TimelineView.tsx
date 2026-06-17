@@ -1,15 +1,17 @@
 'use client';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Activity } from 'lucide-react';
 import { useActivity } from '../../lib/queries';
-import { plotAxis } from './axis';
+import { plotAxis, groupEvents, type AxisEvent, type AxisPoint, type GroupedEvent } from './axis';
 import { eventIcon, eventTone } from './eventMeta';
-import { Button } from '../../components/ui/Button';
+import { Segmented, type SegmentedOption } from '../../components/ui/Segmented';
 import { Section } from '../../components/ui/Section';
 import { Badge } from '../../components/ui/Badge';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
+import type { Tone } from '../../components/ui/tone';
 
-const FILTER_OPTIONS: { label: string; value: string | undefined }[] = [
-  { label: 'All', value: undefined },
+const FILTER_OPTIONS: SegmentedOption[] = [
+  { label: 'All', value: 'all' },
   { label: 'Tasks', value: 'task' },
   { label: 'Missions', value: 'mission' },
   { label: 'Signals', value: 'signal' },
@@ -23,100 +25,156 @@ function parseTs(ts: string): number {
   return Date.parse(iso);
 }
 
+const DOT_TONE: Record<Tone, string> = {
+  accent: 'bg-accent',
+  danger: 'bg-danger',
+  muted: 'bg-text-muted',
+  default: 'bg-text-muted',
+};
+
+/** "12:05" style UTC clock label. */
+function clock(ms: number): string {
+  const d = new Date(ms);
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+function AxisMarker({ point }: { point: AxisPoint }) {
+  const tone = eventTone(point.type);
+  // Scale the dot with the collapsed count so busy runs read as heavier.
+  const size = Math.min(16, 8 + Math.floor(Math.log2(point.count + 1)) * 2);
+  const tip = `${point.target} · ${point.detail} · ${clock(point.timestamp)}${point.count > 1 ? ` · ×${point.count}` : ''}`;
+  return (
+    <div
+      className="group absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
+      style={{ left: `${point.frac * 100}%` }}
+    >
+      <div
+        data-testid="axis-dot"
+        className={`rounded-full ring-2 ring-surface transition-transform group-hover:scale-125 ${DOT_TONE[tone]}`}
+        style={{ width: size, height: size, transitionDuration: 'var(--motion-fast)' }}
+        aria-label={tip}
+      />
+      {/* Hover tooltip */}
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden -translate-x-1/2 whitespace-nowrap rounded-md border border-border bg-elevated px-2.5 py-1.5 text-xs text-text group-hover:block"
+        style={{ boxShadow: 'var(--shadow-raised)' }}
+      >
+        <span className="font-mono text-text">{point.target}</span>
+        <span className="text-text-muted"> · {point.detail} · {clock(point.timestamp)}</span>
+        {point.count > 1 ? <span className="text-text-muted"> · ×{point.count}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function TimelineTrack({ points, ticks }: { points: AxisPoint[]; ticks: { label: string; frac: number }[] }) {
+  return (
+    <div className="relative w-full select-none">
+      {/* Plot area with hour gridlines + baseline */}
+      <div className="relative h-12">
+        {/* Hour gridlines (one per tick) */}
+        {ticks.map((t) => (
+          <div
+            key={t.label}
+            className="absolute inset-y-0 w-px bg-border/50"
+            style={{ left: `${t.frac * 100}%` }}
+            aria-hidden
+          />
+        ))}
+        {/* Baseline */}
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" aria-hidden />
+        {/* Markers */}
+        {points.map((p) => (
+          <AxisMarker key={p.id} point={p} />
+        ))}
+      </div>
+      {/* Hour tick labels */}
+      <div className="relative mt-1.5 h-4">
+        {ticks.map((t) => (
+          <span
+            key={t.label}
+            data-testid="axis-tick"
+            className="absolute -translate-x-1/2 font-mono text-text-muted"
+            style={{ left: `${t.frac * 100}%`, fontSize: 'var(--text-caption)' }}
+          >
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FeedRow({ event }: { event: GroupedEvent }) {
+  const Icon = eventIcon(event.type);
+  const tone = eventTone(event.type);
+  return (
+    <div className="flex items-center gap-3 py-2.5 transition-colors hover:bg-elevated -mx-2 px-2 rounded-md" style={{ transitionDuration: 'var(--motion-fast)' }}>
+      <Icon className="shrink-0 text-text-muted" size={14} aria-hidden />
+      <span className="flex-1 truncate font-mono text-xs text-text">{event.target}</span>
+      <Badge tone={tone}>
+        {event.detail}
+        {event.count > 1 ? <span className="ml-1 opacity-70">×{event.count}</span> : null}
+      </Badge>
+      <span className="shrink-0 whitespace-nowrap font-mono text-text-muted" style={{ fontSize: 'var(--text-caption)' }}>
+        {clock(event.timestamp)}
+      </span>
+    </div>
+  );
+}
+
 export function TimelineView() {
-  const [type, setType] = useState<string | undefined>(undefined);
+  const [filter, setFilter] = useState<string>('all');
+  const type = filter === 'all' ? undefined : filter;
   const q = useActivity(type);
 
-  const rawEvents = (q.data ?? []).flatMap((e) => {
-    const t = parseTs(e.ts);
-    if (Number.isNaN(t)) return [];
-    return [{ id: String(e.id), type: e.type, target: e.target, detail: e.detail, timestamp: t }];
-  });
+  const rawEvents = useMemo<AxisEvent[]>(
+    () =>
+      (q.data ?? []).flatMap((e) => {
+        const t = parseTs(e.ts);
+        if (Number.isNaN(t)) return [];
+        return [{ id: String(e.id), type: e.type, target: e.target, detail: e.detail, timestamp: t }];
+      }),
+    [q.data],
+  );
 
-  const { ticks, points } = plotAxis(rawEvents, Date.now(), WINDOW_HOURS);
+  const { points, ticks } = useMemo(() => plotAxis(rawEvents, Date.now(), WINDOW_HOURS), [rawEvents]);
+  // Feed: most-recent-first, deduped the same way as the axis.
+  const feed = useMemo(() => groupEvents(rawEvents).sort((a, b) => b.timestamp - a.timestamp), [rawEvents]);
+
+  const hasData = !q.isLoading && !q.isError && rawEvents.length > 0;
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        {FILTER_OPTIONS.map((opt) => (
-          <Button
-            key={opt.label}
-            variant={type === opt.value ? 'accent' : 'default'}
-            onClick={() => setType(opt.value)}
-          >
-            {opt.label}
-          </Button>
-        ))}
-      </div>
-
-      {/* Horizontal timeline axis */}
-      <Section title="Activity / last 12h">
-        <div className="relative w-full select-none">
-          {/* Track */}
-          <div className="relative h-8">
-            {/* Baseline */}
-            <div className="absolute inset-x-0 top-1/2 h-px bg-border -translate-y-1/2" />
-            {/* Event dots */}
-            {points.map((p) => {
-              const tone = eventTone(p.type);
-              const dotColor =
-                tone === 'accent'
-                  ? 'bg-accent'
-                  : tone === 'danger'
-                  ? 'bg-danger'
-                  : 'bg-text-muted';
-              const label = new Date(p.timestamp).toUTCString().slice(17, 22);
-              return (
-                <div
-                  key={p.id}
-                  data-testid="axis-dot"
-                  className={`absolute top-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full ${dotColor} border border-surface cursor-default`}
-                  style={{ left: `${p.frac * 100}%` }}
-                  title={`${p.target} — ${p.detail} (${label})`}
-                />
-              );
-            })}
-          </div>
-
-          {/* Tick labels */}
-          <div className="relative h-4 mt-1">
-            {ticks.map((tick) => (
-              <span
-                key={tick.label}
-                data-testid="axis-tick"
-                className="absolute -translate-x-1/2 font-mono text-text-muted"
-                style={{ left: `${tick.frac * 100}%`, fontSize: 'var(--text-caption)' }}
-              >
-                {tick.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </Section>
-
-      {/* Activity feed */}
-      <Section title="Activity">
+      <Section
+        title="Activity / last 12h"
+        icon={Activity}
+        actions={<Segmented options={FILTER_OPTIONS} value={filter} onChange={setFilter} />}
+      >
         {q.isLoading ? (
           <LoadingState />
         ) : q.isError ? (
           <ErrorState message="Failed to load activity" onRetry={() => q.refetch()} />
-        ) : !q.data || q.data.length === 0 ? (
+        ) : !hasData ? (
+          <EmptyState title="No activity yet" description="Events from the last 12 hours appear here." />
+        ) : (
+          <TimelineTrack points={points} ticks={ticks} />
+        )}
+      </Section>
+
+      <Section title="Feed">
+        {q.isLoading ? (
+          <LoadingState />
+        ) : q.isError ? (
+          <ErrorState message="Failed to load activity" onRetry={() => q.refetch()} />
+        ) : !hasData ? (
           <EmptyState title="No activity yet" />
         ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {q.data.map((e) => {
-              const Icon = eventIcon(e.type);
-              const tone = eventTone(e.type);
-              return (
-                <div key={e.id} className="flex items-center gap-3 py-2">
-                  <Icon className="shrink-0 text-text-muted" size={14} />
-                  <span className="font-mono text-xs flex-1">{e.target}</span>
-                  <Badge tone={tone}>{e.detail}</Badge>
-                  <span className="text-text-muted text-xs whitespace-nowrap">{e.ts}</span>
-                </div>
-              );
-            })}
+          <div data-testid="activity-feed" className="flex flex-col divide-y divide-border">
+            {feed.map((e) => (
+              <FeedRow key={e.id} event={e} />
+            ))}
           </div>
         )}
       </Section>

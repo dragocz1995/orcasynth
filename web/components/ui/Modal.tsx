@@ -5,9 +5,15 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  size?: 'lg' | 'sm';
 }
 
-export function Modal({ title, onClose, children }: ModalProps) {
+const SIZES = {
+  lg: 'h-[88vh] w-[92vw]',
+  sm: 'max-h-[80vh] w-full max-w-md',
+};
+
+export function Modal({ title, onClose, children, size = 'lg' }: ModalProps) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -18,20 +24,21 @@ export function Modal({ title, onClose, children }: ModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className="flex h-[88vh] w-[92vw] flex-col bg-surface border border-border"
+        className={`flex flex-col rounded-lg bg-surface border border-border ${SIZES[size]}`}
+        style={{ boxShadow: 'var(--shadow-raised)' }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
-          <span className="font-mono text-sm text-text">{title}</span>
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+          <span className="text-sm font-medium text-text">{title}</span>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center text-text-muted hover:text-text"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-elevated hover:text-text"
           >
             ×
           </button>
