@@ -9,6 +9,7 @@ export function Terminal({ name }: { name: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const paneRef = useRef<string>('');
   const pane = useSessionStream(name);
 
   useEffect(() => {
@@ -26,8 +27,16 @@ export function Terminal({ name }: { name: string }) {
       if (termRef.current) fit.fit();
     });
 
-    // spec §4.3 — refit terminal on container resize
-    const ro = new ResizeObserver(() => { if (termRef.current) fit.fit(); });
+    // Refit on container resize; repaint current pane so content appears
+    // the instant the terminal is sized (e.g. when the modal opens).
+    const ro = new ResizeObserver(() => {
+      if (!termRef.current) return;
+      fit.fit();
+      if (paneRef.current) {
+        termRef.current.clear();
+        termRef.current.write(paneRef.current);
+      }
+    });
     ro.observe(ref.current);
 
     return () => {
@@ -40,6 +49,7 @@ export function Terminal({ name }: { name: string }) {
   }, []);
 
   useEffect(() => {
+    paneRef.current = pane;
     const term = termRef.current;
     if (term) { term.clear(); term.write(pane); }
   }, [pane]);

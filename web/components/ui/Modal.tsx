@@ -22,7 +22,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
       onClick={onClose}
     >
       <div
-        className="flex h-[70vh] w-[80vw] max-w-4xl flex-col bg-surface border border-border"
+        className="flex h-[88vh] w-[92vw] flex-col bg-surface border border-border"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
@@ -36,7 +36,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
             ×
           </button>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {children}
         </div>
       </div>
