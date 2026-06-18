@@ -17,7 +17,7 @@ export interface OrcaConfig {
   allowedExecs: string[];
   customModels: { label: string; exec: string }[];
   hiddenPresets: string[];
-  autopilot: { model: string; apiUrl: string; apiKeySet: boolean; notes: string; prompt: string };
+  autopilot: { model: string; overseerModel: string; apiUrl: string; apiKeySet: boolean; notes: string; prompt: string };
   providers: Record<string, { bin: string; args: string }>;
   defaults: { exec: string; autonomy: string; maxSessions: number };
 }
@@ -25,7 +25,7 @@ export interface ConfigPatch {
   allowedExecs?: string[];
   customModels?: { label: string; exec: string }[];
   hiddenPresets?: string[];
-  autopilot?: { model?: string; apiUrl?: string; apiKey?: string; notes?: string; prompt?: string };
+  autopilot?: { model?: string; overseerModel?: string; apiUrl?: string; apiKey?: string; notes?: string; prompt?: string };
   providers?: Record<string, { bin: string; args: string }>;
   defaults?: { exec?: string; autonomy?: string; maxSessions?: number };
 }

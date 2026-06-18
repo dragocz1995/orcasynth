@@ -79,7 +79,8 @@ export function buildApp(opts: BuildOpts) {
       const make = () => {
         const cfg = config.get(); const key = config.apiKey();
         if (!key) return null;
-        return new RelayClient({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
+        // Overseer decisions use their own model when set, else fall back to the planner model.
+        return new RelayClient({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.overseerModel || cfg.autopilot.model });
       };
       return async (input) => {
         const inf = make();

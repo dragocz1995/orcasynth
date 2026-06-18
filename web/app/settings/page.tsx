@@ -45,6 +45,7 @@ export default function SettingsPage() {
   const [allowed, setAllowed] = useState<string[]>([]);
   const [customModels, setCustomModels] = useState<{ label: string; exec: string }[]>([]);
   const [model, setModel] = useState('');
+  const [overseerModel, setOverseerModel] = useState('');
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
@@ -86,6 +87,7 @@ export default function SettingsPage() {
       setCustomModels(config.data.customModels ?? []);
       setHiddenPresets(config.data.hiddenPresets ?? []);
       setModel(config.data.autopilot.model);
+      setOverseerModel(config.data.autopilot.overseerModel ?? '');
       setApiUrl(config.data.autopilot.apiUrl);
       setNotes(config.data.autopilot.notes);
       setPrompt(config.data.autopilot.prompt);
@@ -270,14 +272,17 @@ export default function SettingsPage() {
             title="Autopilot"
             icon={Bot}
             actions={
-              <Button variant="accent" icon={Save} onClick={() => update.mutate({ autopilot: { model, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } }, { onSuccess: () => { toast('Autopilot saved'); setApiKey(''); }, onError: (e) => toast(String(e), 'error') })}>
+              <Button variant="accent" icon={Save} onClick={() => update.mutate({ autopilot: { model, overseerModel, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } }, { onSuccess: () => { toast('Autopilot saved'); setApiKey(''); }, onError: (e) => toast(String(e), 'error') })}>
                 Save autopilot
               </Button>
             }
           >
             <div className="grid gap-4 sm:grid-cols-2">
-              <SettingCard title="Decision model" description="LLM the autopilot uses to plan">
-                <input value={model} onChange={(e) => setModel(e.target.value)} className={inputClass} />
+              <SettingCard title="Planner model" description="LLM that decomposes a goal into phases">
+                <input value={model} onChange={(e) => setModel(e.target.value)} className={inputClass} placeholder="claude-opus-4-8" />
+              </SettingCard>
+              <SettingCard title="Overseer model" description="LLM that judges agent prompts (blank = same as planner)">
+                <input value={overseerModel} onChange={(e) => setOverseerModel(e.target.value)} className={inputClass} placeholder="mimo-v2.5 (cheaper)" />
               </SettingCard>
               <SettingCard title="OpenAI API URL" description="OpenAI-compatible endpoint">
                 <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} className={inputClass} />
