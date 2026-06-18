@@ -2,10 +2,11 @@
 import { useState } from 'react';
 import { Pencil, Play, Square, Pause, Archive, Trash2, Clock, Zap } from 'lucide-react';
 import type { Task } from '../../lib/types';
-import { useSpawn, useCloseTask, useDeleteTask, useKillSession, useSetTaskStatus, useSendInput } from '../../lib/mutations';
-import { useSessions, useConfig, useSessionSignal } from '../../lib/queries';
+import { useCloseTask, useDeleteTask } from '../../lib/mutations';
+import { useConfig, useSessionSignal } from '../../lib/queries';
 import { taskExec } from '../../lib/taskExec';
-import { taskSessionName, taskAgentName, parseTs } from '../../lib/agentUtils';
+import { taskAgentName, parseTs } from '../../lib/agentUtils';
+import { useTaskControls } from '../../lib/useTaskControls';
 import { Badge } from '../../components/ui/Badge';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { ModelIcon } from '../../components/ui/ModelIcon';
@@ -27,14 +28,9 @@ function fmtWhen(iso: string, locale?: string): string {
   return new Date(ms).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
-export function TaskCard({ task, onEdit, blockers, selected = false, onToggleSelect, selecting = false }: { task: Task; onEdit: (t: Task) => void; blockers?: Task[]; selected?: boolean; onToggleSelect?: (id: string) => void; selecting?: boolean }) {
-  const spawn = useSpawn();
+export function TaskCard({ task, onEdit, onSelect, active = false, blockers, selected = false, onToggleSelect, selecting = false }: { task: Task; onEdit: (t: Task) => void; onSelect?: (t: Task) => void; active?: boolean; blockers?: Task[]; selected?: boolean; onToggleSelect?: (id: string) => void; selecting?: boolean }) {
   const close = useCloseTask();
   const del = useDeleteTask();
-  const kill = useKillSession();
-  const setStatus = useSetTaskStatus();
-  const send = useSendInput();
-  const sessions = useSessions();
   const { toast } = useToast();
   const { t, locale } = useTranslation();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -46,27 +42,20 @@ export function TaskCard({ task, onEdit, blockers, selected = false, onToggleSel
   const iconExec = exec || config?.defaults?.exec || ''; // effective model: explicit, else the configured default
   const isClosed = task.status === 'closed';
 
-  // Run state: a task is running when it's in_progress AND its tmux session is live.
-  const session = taskSessionName(task);
-  const running = task.status === 'in_progress' && !!session && (sessions.data ?? []).includes(session);
+  const { session, running, start, stop, pause } = useTaskControls(task);
   const signal = useSessionSignal(session ?? '');
   const hasAgent = !!taskAgentName(task);
 
-  const start = () => spawn.mutate({ taskId: task.id, exec: exec || undefined }, { onSuccess: (r) => toast(t.tasks.launched.replace('{session}', r.session)), onError: (e) => toast(String(e), 'error') });
-  const stop = () => {
-    if (session) kill.mutate(session);
-    setStatus.mutate({ id: task.id, status: 'open' }, { onSuccess: () => toast(t.tasks.stopped.replace('{id}', task.id)), onError: (e) => toast(String(e), 'error') });
-  };
-  const pause = () => { if (session) send.mutate({ name: session, keys: ['C-c'] }, { onSuccess: () => toast(t.sessions.interrupted.replace('{name}', session)), onError: (e) => toast(String(e), 'error') }); };
   const STATUS_LABEL: Record<string, string> = { open: t.tasks.statusOpen, in_progress: t.tasks.statusInProgress, blocked: t.tasks.statusBlocked, closed: t.tasks.statusClosed, cancelled: t.tasks.statusCancelled };
+  const open = () => (onSelect ?? onEdit)(task);
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onEdit(task)}
-      onKeyDown={(e) => { if (e.key === 'Enter') onEdit(task); }}
-      className={`card-interactive group relative flex cursor-pointer gap-3.5 rounded-lg border p-3.5 ${selected ? 'border-accent bg-accent/[0.06]' : 'border-border bg-surface'}`}
+      onClick={open}
+      onKeyDown={(e) => { if (e.key === 'Enter') open(); }}
+      className={`card-interactive group relative flex cursor-pointer gap-3.5 rounded-lg border p-3.5 ${selected || active ? 'border-accent bg-accent/[0.06]' : 'border-border bg-surface'}`}
     >
       {/* left column: big model-icon bubble (running → accent ring), divided from the content */}
       <div className="flex shrink-0 flex-col items-center justify-center self-stretch border-r border-border pr-3.5">

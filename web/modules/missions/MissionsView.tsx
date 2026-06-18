@@ -2,22 +2,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Rocket, Plus, Pause, Play, Power, GitBranch } from 'lucide-react';
-import { useMissions, useTasks, useMissionDetail } from '../../lib/queries';
+import { useMissions, useTasks, useMissionDetail, useSessionSignals } from '../../lib/queries';
 import { usePauseMission, useResumeMission, useDisengage } from '../../lib/mutations';
-import type { Mission, MissionTask } from '../../lib/types';
+import type { Mission } from '../../lib/types';
 import type { Tone } from '../../components/ui/tone';
+import { taskSessionName } from '../../lib/agentUtils';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 import { IconButton } from '../../components/ui/IconButton';
 import { ActionMenu } from '../../components/ui/ActionMenu';
+import { NeedsInputBanner } from '../../components/ui/NeedsInputBanner';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { useToast } from '../../components/ui/Toast';
 import { useTranslation } from '../../lib/i18n';
-import { statusTone } from '../dashboard/statusTone';
-import { taskTypeMeta } from '../tasks/taskMeta';
+import { TaskDetailPane } from '../tasks/TaskDetailPane';
 import { DependencyGraph } from './DependencyGraph';
 import { EngageModal } from './EngageModal';
+
+/** Count of a mission's live children and how many are waiting for input. */
+function missionLive(kids: { id: string; status: string; labels?: string[] }[], signals: Record<string, { type: string }>): { live: number; needs: number } {
+  const liveKids = kids.filter((k) => k.status === 'in_progress');
+  const needs = liveKids.filter((k) => { const s = taskSessionName(k); return s ? signals[s]?.type === 'needs_input' : false; }).length;
+  return { live: liveKids.length, needs };
+}
 
 // One ribbon segment per phase, colored by its status.
 const phaseColor = (status: string): string =>
@@ -35,6 +43,7 @@ const groupOf = (state: string): Group => (state === 'paused' ? 'paused' : state
 export function MissionsView() {
   const missions = useMissions();
   const tasks = useTasks();
+  const signals = useSessionSignals();
   const pause = usePauseMission();
   const resume = useResumeMission();
   const disengage = useDisengage();
@@ -118,6 +127,12 @@ export function MissionsView() {
                             </div>
                             <span className="shrink-0 font-mono text-[11px] text-text-muted">{t.missions.progressDone.replace('{done}', String(done)).replace('{total}', String(total))}</span>
                           </div>
+                          {(() => { const { live, needs } = missionLive(kids, signals); return (live > 0 || needs > 0) ? (
+                            <div className="flex items-center gap-2">
+                              {needs > 0 ? <span className="flex items-center gap-1 text-[11px] font-medium text-warning" title={t.agent.needsInput}><span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />{needs}</span> : null}
+                              {live > 0 ? <span className="flex items-center gap-1 text-[11px] font-medium text-success" title={t.agent.working}><span className="live-dot h-1.5 w-1.5 rounded-full bg-success" style={{ ['--live-ring' as string]: 'color-mix(in srgb, var(--color-success) 50%, transparent)' }} aria-hidden />{live}</span> : null}
+                            </div>
+                          ) : null; })()}
                           <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
                             {paused
                               ? <IconButton icon={Play} label={t.missions.resume} onClick={() => resume.mutate(m.id, { onSuccess: () => toast(t.missions.resumed), onError: (e) => toast(String(e), 'error') })} />
@@ -153,6 +168,7 @@ const STATE_TONE = (state: string): Tone => (state === 'disengaged' ? 'muted' : 
 
 function MissionWorkspace({ missionId }: { missionId: string }) {
   const detail = useMissionDetail(missionId);
+  const allTasks = useTasks();
   const { t } = useTranslation();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -165,7 +181,14 @@ function MissionWorkspace({ missionId }: { missionId: string }) {
 
   const d = detail.data;
   const STATE_LABEL: Record<string, string> = { active: t.missions.stateActive, paused: t.missions.statePaused, disengaged: t.missions.stateDisengaged };
-  const selectedTask: MissionTask | undefined = selectedTaskId ? d.tasks.find((task) => task.id === selectedTaskId) : undefined;
+
+  // Live tmux sessions belonging to this mission's tasks (labels live on the full task records).
+  const fullById = new Map((allTasks.data ?? []).map((x) => [x.id, x]));
+  const missionSessions = d.tasks
+    .map((mt) => fullById.get(mt.id))
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .map((x) => taskSessionName(x))
+    .filter((s): s is string => !!s);
 
   return (
     <div className="flex flex-col gap-4">
@@ -185,6 +208,9 @@ function MissionWorkspace({ missionId }: { missionId: string }) {
         </div>
       </div>
 
+      {/* Needs-human-attention strip, scoped to this mission's live sessions */}
+      <NeedsInputBanner sessions={missionSessions} />
+
       {/* DAG canvas as hero */}
       <div className="rounded-xl border border-border border-t-2 border-t-accent/40 bg-surface p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
         <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">
@@ -196,9 +222,9 @@ function MissionWorkspace({ missionId }: { missionId: string }) {
           : <DependencyGraph tasks={d.tasks} deps={d.deps} onSelect={setSelectedTaskId} />}
       </div>
 
-      {/* Selected-task detail panel */}
+      {/* Selected-task detail panel — full task detail resolved by id */}
       <div className="rounded-lg border border-border bg-surface p-4">
-        {selectedTask ? <TaskDetail task={selectedTask} /> : (
+        {selectedTaskId ? <TaskDetailPane taskId={selectedTaskId} /> : (
           <p className="py-2 text-center text-sm text-text-muted">{t.missions.selectTaskHint}</p>
         )}
       </div>
@@ -216,16 +242,3 @@ function Metric({ label, value, tone = 'muted' }: { label: string; value: number
   );
 }
 
-function TaskDetail({ task }: { task: MissionTask }) {
-  const Icon = taskTypeMeta(task.type).icon;
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Icon size={15} className="shrink-0 text-text-muted" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{task.title}</span>
-        <Badge tone={statusTone(task.status)}>{task.status.replace('_', ' ')}</Badge>
-      </div>
-      <span className="font-mono text-[11px] capitalize text-text-muted">{taskTypeMeta(task.type).label}</span>
-    </div>
-  );
-}

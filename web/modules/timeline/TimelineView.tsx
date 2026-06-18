@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { Activity, ChevronDown } from 'lucide-react';
+import Link from 'next/link';
+import { Activity, ChevronDown, ArrowUpRight } from 'lucide-react';
 import { useActivity, useTasks, useConfig, useSessions } from '../../lib/queries';
 import { plotAxis, groupEvents, type AxisEvent, type AxisPoint, type GroupedEvent } from './axis';
 import { eventIcon, eventTone } from './eventMeta';
@@ -139,12 +140,13 @@ function Lane({ target, points, ticks }: { target: string; points: AxisPoint[]; 
 
 /** Collapsible per-target group: header (model icon + latest status) that expands to the event list.
  *  Re-renders live as `events` updates, even while open (open state is keyed by target). */
-function FeedGroup({ target, title, events, exec, open, onToggle }: { target: string; title?: string; events: GroupedEvent[]; exec?: string; open: boolean; onToggle: () => void }) {
+function FeedGroup({ target, title, events, exec, href, summary, open, onToggle }: { target: string; title?: string; events: GroupedEvent[]; exec?: string; href?: string; summary?: string; open: boolean; onToggle: () => void }) {
   const latest = events[0]; // newest-first
   const LatestIcon = eventIcon(latest.type);
   const total = events.reduce((s, e) => s + e.count, 0);
   return (
-    <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="relative shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
+      {href ? <Link href={href} className="absolute right-9 top-2.5 z-10 text-text-muted transition-colors hover:text-accent" aria-label={target}><ArrowUpRight size={15} aria-hidden /></Link> : null}
       <button type="button" onClick={onToggle} aria-expanded={open} className="relative flex w-full items-center gap-3 px-3 py-2.5 pr-14 text-left transition-colors hover:bg-elevated">
         <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-elevated">
           {exec ? <ModelIcon name={exec} size={38} /> : <LatestIcon size={30} className="text-text-muted" aria-hidden />}
@@ -164,6 +166,7 @@ function FeedGroup({ target, title, events, exec, open, onToggle }: { target: st
       </button>
       {open && (
         <div className="divide-y divide-border border-t border-border">
+          {summary ? <p className="px-4 py-2 text-[11px] leading-snug text-text-muted">{summary}</p> : null}
           {events.map((e) => {
             const Icon = eventIcon(e.type);
             return (
@@ -182,12 +185,13 @@ function FeedGroup({ target, title, events, exec, open, onToggle }: { target: st
 
 /** Live variant for a running session: header shows what the agent is doing *right now*
  *  (last line of its tmux pane, polled every 2s); expanded shows the live terminal tail. */
-function LiveFeedGroup({ target, title, exec, ts, open, onToggle }: { target: string; title?: string; exec?: string; ts: number; open: boolean; onToggle: () => void }) {
+function LiveFeedGroup({ target, title, exec, href, ts, open, onToggle }: { target: string; title?: string; exec?: string; href?: string; ts: number; open: boolean; onToggle: () => void }) {
   const { tail } = useSessionPane(target, 8);
   const lines = parseAnsi(tail).map((s) => s.text).join('').split('\n').map((l) => l.trimEnd()).filter((l) => l.trim());
   const current = lines[lines.length - 1] ?? '…';
   return (
-    <div className="shrink-0 overflow-hidden rounded-lg border border-accent/40 bg-surface">
+    <div className="relative shrink-0 overflow-hidden rounded-lg border border-accent/40 bg-surface">
+      {href ? <Link href={href} className="absolute right-9 top-2.5 z-10 text-text-muted transition-colors hover:text-accent" aria-label={target}><ArrowUpRight size={15} aria-hidden /></Link> : null}
       <button type="button" onClick={onToggle} aria-expanded={open} className="relative flex w-full items-center gap-3 px-3 py-2.5 pr-14 text-left transition-colors hover:bg-elevated">
         <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-elevated">
           {exec ? <ModelIcon name={exec} size={38} /> : <Activity size={30} className="text-accent" aria-hidden />}
@@ -255,19 +259,27 @@ export function TimelineView() {
   const { points, ticks } = useMemo(() => plotAxis(rawEvents, Date.now(), windowHours), [rawEvents, windowHours]);
   // Feed: most-recent-first, deduped the same way as the axis.
   const feed = useMemo(() => groupEvents(rawEvents).sort((a, b) => b.timestamp - a.timestamp), [rawEvents]);
-  // Resolve a target (task id or orca-<agent> session) → its model exec, for the model icon.
+  // Resolve a target (task id or orca-<agent> session) → its task record.
+  const taskForTarget = (target: string): Task | undefined =>
+    tasks.data?.find((t) => t.id === target)
+    ?? (target.startsWith('orca-') ? tasks.data?.find((t) => (t.labels ?? []).includes(`agent:${target.slice('orca-'.length)}`)) : undefined);
   const execForTarget = (target: string): string | undefined => {
-    const found: Task | undefined =
-      tasks.data?.find((t) => t.id === target)
-      ?? (target.startsWith('orca-') ? tasks.data?.find((t) => (t.labels ?? []).includes(`agent:${target.slice('orca-'.length)}`)) : undefined);
+    const found = taskForTarget(target);
     return found ? (taskExec(found.labels) || config?.defaults?.exec || undefined) : undefined;
   };
-  // Friendly task title for a target (id or orca-<agent>), for the bold feed heading.
-  const titleForTarget = (target: string): string | undefined => {
-    const found: Task | undefined =
-      tasks.data?.find((t) => t.id === target)
-      ?? (target.startsWith('orca-') ? tasks.data?.find((t) => (t.labels ?? []).includes(`agent:${target.slice('orca-'.length)}`)) : undefined);
-    return found?.title;
+  const titleForTarget = (target: string): string | undefined => taskForTarget(target)?.title;
+  // Cross-link a feed group to the right detail surface (task / sessions / missions).
+  const hrefForGroup = (g: { target: string; events: GroupedEvent[] }): string | undefined => {
+    const task = taskForTarget(g.target);
+    if (task) return `/tasks?select=${encodeURIComponent(task.id)}`;
+    if (g.target.startsWith('orca-')) return '/sessions';
+    if (g.events[0]?.type === 'mission') return '/missions';
+    return undefined;
+  };
+  // Result summary for a closed task target, shown when its feed group is expanded.
+  const summaryForGroup = (target: string): string | undefined => {
+    const task = taskForTarget(target);
+    return task && (task.status === 'closed' || task.status === 'cancelled') ? (task.result_summary?.trim() || undefined) : undefined;
   };
   // Group the feed per target (agent/task/mission) → collapsible cards, newest activity first.
   const feedGroups = useMemo(() => {
@@ -338,6 +350,7 @@ export function TimelineView() {
                   target={g.target}
                   title={titleForTarget(g.target)}
                   exec={execForTarget(g.target)}
+                  href={hrefForGroup(g)}
                   ts={g.last}
                   open={openGroups.has(g.target)}
                   onToggle={() => toggleGroup(g.target)}
@@ -349,6 +362,8 @@ export function TimelineView() {
                   title={titleForTarget(g.target)}
                   events={g.events}
                   exec={execForTarget(g.target)}
+                  href={hrefForGroup(g)}
+                  summary={summaryForGroup(g.target)}
                   open={openGroups.has(g.target)}
                   onToggle={() => toggleGroup(g.target)}
                 />

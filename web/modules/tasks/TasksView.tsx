@@ -6,6 +6,7 @@ import type { Task, TaskStatus } from '../../lib/types';
 import { useTasks, useAllDeps } from '../../lib/queries';
 import { taskBlockers } from '../../lib/agentUtils';
 import { useCloseTask, useDeleteTask } from '../../lib/mutations';
+import { TaskDetailPane } from './TaskDetailPane';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
@@ -42,6 +43,7 @@ export function TasksView() {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const FILTERS: { value: Filter; label: string }[] = [
     { value: 'in_progress', label: t.tasks.filterActive },
@@ -51,10 +53,11 @@ export function TasksView() {
     { value: 'all', label: t.tasks.filterAll },
   ];
 
-  // Command palette: /tasks?new=1 opens the create modal.
+  // Command palette: /tasks?new=1 opens the create modal; ?select=<id> opens its detail pane.
   const router = useRouter();
   const params = useSearchParams();
   useEffect(() => { if (params.get('new') === '1') { setCreating(true); router.replace('/tasks'); } }, [params, router]);
+  useEffect(() => { const s = params.get('select'); if (s) setSelectedId(s); }, [params]);
 
   // Resolve each task's unresolved dependency blockers once for the whole list.
   const blockedBy = useMemo(() => {
@@ -127,34 +130,44 @@ export function TasksView() {
         : !tasks.data || tasks.data.length === 0 ? <EmptyState title={t.tasks.empty} description={t.tasks.emptyDescription} icon={ListChecks} action={<Button variant="accent" icon={Plus} onClick={() => setCreating(true)}>{t.tasks.newTask}</Button>} />
         : filtered.length === 0 ? <EmptyState title={t.tasks.noMatches} description={t.tasks.noMatchesDescription} icon={Search} />
         : (
-          <div className="flex flex-col gap-5">
-            {groups.map((g) => (
-              <div key={g.key} className="flex flex-col gap-2">
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{g.label}</span>
-                  <span className="h-px flex-1 bg-border" />
-                  <span className="font-mono text-tiny text-text-muted">{g.items.length}</span>
+          <div className="lg:flex lg:items-start lg:gap-5">
+            {/* Left — searchable task list */}
+            <div className="flex flex-col gap-5 lg:w-[42%] lg:shrink-0">
+              {groups.map((g) => (
+                <div key={g.key} className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">{g.label}</span>
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="font-mono text-tiny text-text-muted">{g.items.length}</span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {g.items.map((task) => <TaskCard key={task.id} task={task} onEdit={setEditing} onSelect={(x) => setSelectedId(x.id)} active={selectedId === task.id} blockers={blockedBy.get(task.id)} selected={selected.has(task.id)} onToggleSelect={toggleSelect} selecting={selected.size > 0} />)}
+                  </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {g.items.map((task) => <TaskCard key={task.id} task={task} onEdit={setEditing} blockers={blockedBy.get(task.id)} selected={selected.has(task.id)} onToggleSelect={toggleSelect} selecting={selected.size > 0} />)}
-                </div>
-              </div>
-            ))}
+              ))}
 
-            {filtered.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-border pt-3">
-                <span className="font-mono text-xs text-text-muted">
-                  {t.tasks.pageRange
-                    .replace('{from}', String(clampedPage * PAGE_SIZE + 1))
-                    .replace('{to}', String(clampedPage * PAGE_SIZE + pageItems.length))
-                    .replace('{total}', String(filtered.length))}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" icon={ChevronLeft} disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>{t.tasks.prevPage}</Button>
-                  <Button variant="ghost" disabled={clampedPage >= pageCount - 1} onClick={() => setPage(clampedPage + 1)}>{t.tasks.nextPage}<ChevronRight size={15} className="ml-1" /></Button>
+              {filtered.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="font-mono text-xs text-text-muted">
+                    {t.tasks.pageRange
+                      .replace('{from}', String(clampedPage * PAGE_SIZE + 1))
+                      .replace('{to}', String(clampedPage * PAGE_SIZE + pageItems.length))
+                      .replace('{total}', String(filtered.length))}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" icon={ChevronLeft} disabled={clampedPage === 0} onClick={() => setPage(clampedPage - 1)}>{t.tasks.prevPage}</Button>
+                    <Button variant="ghost" disabled={clampedPage >= pageCount - 1} onClick={() => setPage(clampedPage + 1)}>{t.tasks.nextPage}<ChevronRight size={15} className="ml-1" /></Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+
+            {/* Right — persistent detail pane */}
+            <aside className="mt-5 min-w-0 lg:mt-0 lg:flex-1 lg:sticky lg:top-[57px]">
+              {selectedId
+                ? <div className="rounded-lg border border-border bg-surface p-4" style={{ boxShadow: 'var(--shadow-card)' }}><TaskDetailPane taskId={selectedId} onEdit={setEditing} /></div>
+                : <div className="hidden items-center justify-center rounded-lg border border-dashed border-border py-20 text-sm text-text-muted lg:flex">{t.tasks.selectHint}</div>}
+            </aside>
           </div>
         )}
 
