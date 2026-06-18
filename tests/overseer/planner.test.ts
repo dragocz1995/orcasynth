@@ -28,6 +28,12 @@ describe('planner.parsePhases', () => {
     expect(phases[2].agent).toBeUndefined();
   });
 
+  it('captures per-phase details when present', () => {
+    const phases = parsePhases('[{"title":"A","details":"Build X with acceptance Y"},{"title":"B","details":"  "}]');
+    expect(phases[0].details).toBe('Build X with acceptance Y');
+    expect(phases[1].details).toBeUndefined(); // blank → omitted
+  });
+
   it('throws when there is no array', () => {
     expect(() => parsePhases('no json here')).toThrow();
   });

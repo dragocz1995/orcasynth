@@ -26,7 +26,7 @@ export function defaultPromptTemplate(): string {
 /** Task types a phase may take; anything else is coerced to 'task'. */
 export const VALID_TYPES = new Set(['task', 'feature', 'bug', 'chore']);
 
-export interface Phase { title: string; type: string; agent?: string }
+export interface Phase { title: string; type: string; agent?: string; details?: string }
 
 /** Sanitize a model-supplied agent name into a tmux-safe single token. */
 export function sanitizeAgentName(raw: unknown): string | undefined {
@@ -48,8 +48,13 @@ export function parsePhases(text: string): Phase[] {
   const raw = JSON.parse(match[0]) as unknown; // caller wraps in try/catch
   if (!Array.isArray(raw)) throw new Error('plan output is not an array');
   const phases = raw
-    .filter((p): p is { title: string; type?: unknown; agent?: unknown } => !!p && typeof (p as { title?: unknown }).title === 'string' && (p as { title: string }).title.trim().length > 0)
-    .map((p) => ({ title: p.title.trim(), type: VALID_TYPES.has(String(p.type)) ? String(p.type) : 'task', agent: sanitizeAgentName(p.agent) }));
+    .filter((p): p is { title: string; type?: unknown; agent?: unknown; details?: unknown } => !!p && typeof (p as { title?: unknown }).title === 'string' && (p as { title: string }).title.trim().length > 0)
+    .map((p) => ({
+      title: p.title.trim(),
+      type: VALID_TYPES.has(String(p.type)) ? String(p.type) : 'task',
+      agent: sanitizeAgentName(p.agent),
+      details: typeof p.details === 'string' && p.details.trim() ? p.details.trim() : undefined,
+    }));
   if (phases.length === 0) throw new Error('plan output had no valid phases');
   return phases;
 }

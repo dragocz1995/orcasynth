@@ -123,7 +123,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     if (!goal) return c.json({ error: 'goal required' }, 400);
     if (b.exec && !d.config.get().allowedExecs.includes(b.exec)) return c.json({ error: 'exec not allowed' }, 400);
 
-    let phases: { title: string; type: string; agent?: string }[];
+    let phases: { title: string; type: string; agent?: string; details?: string }[];
     if (Array.isArray(b.phases) && b.phases.length > 0) {
       // Manual mode: phases supplied by the client — no LLM, no key required.
       phases = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
@@ -146,8 +146,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
     const created: typeof epic[] = [];
     for (const ph of phases) {
-      // Children carry the overall goal as context so each phase agent sees the bigger picture.
-      const child = d.tasks.create({ id: newId(), project_id: d.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: `Overall goal: ${goal}` });
+      // Children carry the phase details (acceptance) plus the overall goal as context.
+      const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${goal}` : `Overall goal: ${goal}`;
+      const child = d.tasks.create({ id: newId(), project_id: d.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: childDesc });
       const prev = created[created.length - 1];
       if (prev) d.tasks.addDep(child.id, prev.id); // sequential: phase n depends on n-1
       if (b.exec) d.tasks.setExec(child.id, b.exec);

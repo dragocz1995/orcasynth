@@ -27,7 +27,12 @@ export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
   const extra = ctx.extraArgs && ctx.extraArgs.trim() ? ` ${ctx.extraArgs.trim()}` : '';
   const titlePart = ctx.taskTitle ? `: ${ctx.taskTitle}` : '';
   const detailsPart = ctx.taskDescription && ctx.taskDescription.trim() ? `\n\nDetails:\n${ctx.taskDescription.trim()}` : '';
-  const prompt = `You are the orca agent "${ctx.agentName}". Work on task ${ctx.taskId}${titlePart}.${detailsPart}\n\nWhen the work is complete, run: ${closeCommand}`;
+  const prompt = [
+    `You are the orca agent "${ctx.agentName}". Work on task ${ctx.taskId}${titlePart}.${detailsPart}`,
+    '',
+    'First read the project context (AGENTS.md, CLAUDE.md, or README) to understand conventions, then implement the task end to end. Make the actual code changes — do not just describe them. Verify your work (build/tests if relevant).',
+    `When the work is complete and verified, run: ${closeCommand}`,
+  ].join('\n');
   if (spec.program.startsWith('opencode')) {
     const bin = ctx.bin || 'opencode';
     // `run` executes headless and exits when done (the interactive TUI via --prompt
