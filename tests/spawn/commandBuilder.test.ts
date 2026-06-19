@@ -52,4 +52,14 @@ describe('buildAgentCommand', () => {
     const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
     expect(cmd).not.toContain('phase of epic');
   });
+  it('tells a phase agent to build on prior phases instead of redoing the whole goal', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-2', agentName: 'A', epicId: 'orca-epic' });
+    expect(cmd).toContain('ONE phase of a larger sequential mission');
+    expect(cmd).toContain('do NOT redo or re-verify');
+    expect(cmd).toContain('git status'); // nudged to check current repo state first
+  });
+  it('gives a standalone task the plain implement instruction (no phase framing)', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+    expect(cmd).not.toContain('ONE phase of a larger sequential mission');
+  });
 });
