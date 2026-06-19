@@ -27,6 +27,7 @@ export class Scheduler {
       const agentName = named || this.d.nameAgent();
       this.d.tasks.update(task.id, { scheduled_at: null }); // consume so it fires once
       this.d.tasks.setAgent(task.id, agentName);            // link task → session for run controls
+      this.d.tasks.markStarted(task.id, this.d.clock.now()); // precise spawn time → correct usage attribution under concurrency
       this.d.tasks.setStatus(task.id, 'in_progress');
       await this.d.spawn.launch({
         projectId: this.d.project.id, projectPath: this.d.project.path, taskId: task.id,

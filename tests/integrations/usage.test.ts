@@ -106,14 +106,13 @@ describe('readTaskUsage', () => {
       JSON.stringify({ role: 'assistant', cost: 0.02, tokens: { input: 99, output: 0, cache: { read: 0, write: 0 } } }));
 
     // Both tasks share the SAME whole-second created_at (the realistic mission case), but carry
-    // distinct sub-second started:<ms> labels reflecting real spawn order — and crucially, the task
-    // that spawned FIRST (b, by id) actually started LATER in ms, proving rank follows started:<ms>,
-    // not created_at order or id order.
+    // distinct sub-second started:<ms> labels. Crucially the id-FIRST task (t-a) started LATER,
+    // so id order is the OPPOSITE of start order — proving rank follows started:<ms>, not id.
     const mk = (id: string, startedMs: number) => ({ id, labels: ['exec:ollama-cloud/deepseek-v4-flash', `started:${startedMs}`], created_at: '2026-06-19 10:00:00' });
-    const a = mk('t-a', SINCE + 90);  // started first → rank 0 → ses_first (10)
-    const b = mk('t-b', SINCE + 140); // started second → rank 1 → ses_second (99)
+    const a = mk('t-a', SINCE + 140); // id-first but started LATER → rank 1 → ses_second (99)
+    const b = mk('t-b', SINCE + 90);  // id-second but started FIRST → rank 0 → ses_first (10)
     const siblings = [a, b];
-    expect(readTaskUsage(a, siblings, DIR, fallback, home)?.total).toBe(10);
-    expect(readTaskUsage(b, siblings, DIR, fallback, home)?.total).toBe(99);
+    expect(readTaskUsage(a, siblings, DIR, fallback, home)?.total).toBe(99);
+    expect(readTaskUsage(b, siblings, DIR, fallback, home)?.total).toBe(10);
   });
 });
