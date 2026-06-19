@@ -7,6 +7,8 @@ import { usePauseMission, useResumeMission, useDisengage } from '../../lib/mutat
 import type { Mission } from '../../lib/types';
 import type { Tone } from '../../components/ui/tone';
 import { taskSessionName } from '../../lib/agentUtils';
+import { epicCapacity } from '../../lib/taskTree';
+import { useSessions } from '../../lib/queries';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -14,6 +16,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import { ActionMenu } from '../../components/ui/ActionMenu';
 import { NeedsInputBanner } from '../../components/ui/NeedsInputBanner';
 import { ProgressRibbon } from '../../components/ui/ProgressRibbon';
+import { CapacityMeter } from '../../components/ui/CapacityMeter';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { useToast } from '../../components/ui/Toast';
 import { useTranslation } from '../../lib/i18n';
@@ -36,6 +39,7 @@ const groupOf = (state: string): Group => (state === 'paused' ? 'paused' : state
 export function MissionsView() {
   const missions = useMissions();
   const tasks = useTasks();
+  const sessions = useSessions();
   const signals = useSessionSignals();
   const pause = usePauseMission();
   const resume = useResumeMission();
@@ -122,6 +126,7 @@ export function MissionsView() {
                               {live > 0 ? <span className="flex items-center gap-1 text-[11px] font-medium text-success" title={t.agent.working}><span className="live-dot h-1.5 w-1.5 rounded-full bg-success" style={{ ['--live-ring' as string]: 'color-mix(in srgb, var(--color-success) 50%, transparent)' }} aria-hidden />{live}</span> : null}
                             </div>
                           ) : null; })()}
+                          {!disengaged ? (() => { const cap = epicCapacity(kids, sessions.data ?? [], m.max_sessions); return <CapacityMeter running={cap.running} max={cap.max} />; })() : null}
                           <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100" onClick={(e) => e.stopPropagation()}>
                             {paused
                               ? <IconButton icon={Play} label={t.missions.resume} onClick={() => resume.mutate(m.id, { onSuccess: () => toast(t.missions.resumed), onError: (e) => toast(String(e), 'error') })} />
@@ -158,6 +163,7 @@ const STATE_TONE = (state: string): Tone => (state === 'disengaged' ? 'muted' : 
 function MissionWorkspace({ missionId }: { missionId: string }) {
   const detail = useMissionDetail(missionId);
   const allTasks = useTasks();
+  const sessions = useSessions();
   const { t } = useTranslation();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -188,6 +194,7 @@ function MissionWorkspace({ missionId }: { missionId: string }) {
           <h2 className="min-w-0 flex-1 truncate text-base font-semibold text-text">{d.epic?.title ?? d.mission.epic_id}</h2>
           <Badge tone="accent">{d.mission.autonomy}</Badge>
           <Badge tone={STATE_TONE(d.mission.state)}>{STATE_LABEL[d.mission.state] ?? d.mission.state}</Badge>
+          {d.mission.state !== 'disengaged' ? (() => { const cap = epicCapacity(d.tasks, sessions.data ?? [], d.mission.max_sessions); return <CapacityMeter running={cap.running} max={cap.max} />; })() : null}
         </div>
         <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
           <Metric label={t.missions.total} value={d.progress.total} />

@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus, ListChecks, Search, Archive, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Task, TaskStatus } from '../../lib/types';
-import { useTasks, useAllDeps } from '../../lib/queries';
-import { taskBlockers } from '../../lib/agentUtils';
-import { epicChildren, phaseIds } from '../../lib/taskTree';
+import { useTasks, useAllDeps, useSessions, useSessionSignals } from '../../lib/queries';
+import { taskBlockers, taskSessionName } from '../../lib/agentUtils';
+import { epicChildren, phaseIds, epicLive } from '../../lib/taskTree';
 import { useCloseTask, useDeleteTask } from '../../lib/mutations';
 import { TaskDetailPane } from './TaskDetailPane';
 import { EpicGroup } from './EpicGroup';
@@ -20,7 +20,7 @@ import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states
 import { TaskCard } from './TaskCard';
 import { TaskModal } from './TaskModal';
 
-type Filter = 'all' | TaskStatus;
+type Filter = 'all' | TaskStatus | 'autopilot';
 const PAGE_SIZE = 12;
 
 /** The date a task belongs to: its schedule, else when it closed, else when it was created. */
@@ -34,6 +34,8 @@ const dayKey = (ms: number): string => { const d = new Date(ms); return `${d.get
 export function TasksView() {
   const tasks = useTasks();
   const deps = useAllDeps();
+  const sessions = useSessions();
+  const signals = useSessionSignals();
   const close = useCloseTask();
   const del = useDeleteTask();
   const { toast } = useToast();
@@ -58,6 +60,7 @@ export function TasksView() {
     { value: 'open', label: t.tasks.filterOpen },
     { value: 'blocked', label: t.tasks.filterBlocked },
     { value: 'closed', label: t.tasks.filterClosed },
+    { value: 'autopilot', label: t.tasks.filterAutopilot },
     { value: 'all', label: t.tasks.filterAll },
   ];
 
@@ -72,6 +75,22 @@ export function TasksView() {
     const task = tasks.data?.find((x) => x.id === selectedId);
     if (task?.parent_id && phaseSet.has(selectedId)) setExpandedEpics((s) => new Set(s).add(task.parent_id as string));
   }, [selectedId, tasks.data, phaseSet]);
+
+  // In the Autopilot filter, auto-expand epics that have a running or needs-input phase
+  // so their current work is immediately visible. Collapsed ones stay collapsed otherwise.
+  useEffect(() => {
+    if (filter !== 'autopilot') return;
+    const toExpand = new Set<string>();
+    for (const epic of tasks.data ?? []) {
+      if (epic.type !== 'epic') continue;
+      const kids = childMap.get(epic.id) ?? [];
+      if (kids.length === 0) continue;
+      const { running } = epicLive(kids, sessions.data ?? [], signals);
+      const needs = kids.some((k) => { const s = taskSessionName(k); return s ? signals[s]?.type === 'needs_input' : false; });
+      if (running > 0 || needs) toExpand.add(epic.id);
+    }
+    if (toExpand.size) setExpandedEpics((s) => { const n = new Set(s); for (const id of toExpand) n.add(id); return n; });
+  }, [filter, tasks.data, childMap, sessions.data, signals]);
 
   // Resolve each task's unresolved dependency blockers once for the whole list.
   const blockedBy = useMemo(() => {
@@ -92,17 +111,36 @@ export function TasksView() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matchText = (t: Task) => `${t.title} ${t.id} ${t.description ?? ''}`.toLowerCase().includes(q);
+    const isEpicActive = (epic: Task): boolean => {
+      const kids = childMap.get(epic.id) ?? [];
+      return epicLive(kids, sessions.data ?? [], signals).running > 0
+        || kids.some((k) => { const s = taskSessionName(k); return s ? signals[s]?.type === 'needs_input' : false; });
+    };
     return (tasks.data ?? [])
       .filter((t) => !phaseSet.has(t.id)) // phases are shown nested inside their epic group
       .filter((t) => {
+        if (filter === 'autopilot') {
+          // Only epics, and only those with phases; active ones surface to the top.
+          if (t.type !== 'epic') return false;
+          const kids = childMap.get(t.id) ?? [];
+          if (kids.length === 0) return false;
+          return true;
+        }
         // An epic matches the status filter / search if it or any of its phases matches.
         const kids = t.type === 'epic' ? (childMap.get(t.id) ?? []) : [];
         if (filter !== 'all' && t.status !== filter && !kids.some((k) => k.status === filter)) return false;
         if (!q) return true;
         return matchText(t) || kids.some(matchText);
       })
-      .sort((a, b) => taskDayMs(b) - taskDayMs(a)); // newest day first
-  }, [tasks.data, query, filter, childMap, phaseSet]);
+      .sort((a, b) => {
+        if (filter === 'autopilot') {
+          const aActive = isEpicActive(a);
+          const bActive = isEpicActive(b);
+          if (aActive !== bActive) return aActive ? -1 : 1;
+        }
+        return taskDayMs(b) - taskDayMs(a); // newest day first
+      });
+  }, [tasks.data, query, filter, childMap, phaseSet, sessions.data, signals]);
 
   // Reset to the first page whenever the result set changes shape.
   useEffect(() => { setPage(0); }, [query, filter]);

@@ -19,7 +19,7 @@ beforeAll(() => server.listen()); afterEach(() => server.resetHandlers()); after
 describe('DashboardView', () => {
   it('renders metric cards and a task row with a status badge', async () => {
     const { wrapper: Wrapper } = createWrapper();
-    render(<Wrapper><DashboardView /></Wrapper>);
+    render(<Wrapper><ToastProvider><DashboardView /></ToastProvider></Wrapper>);
     expect(await screen.findByText('Alpha')).toBeTruthy();
     // metric labels present
     expect(screen.getAllByText(/Open/i).length).toBeGreaterThan(0);

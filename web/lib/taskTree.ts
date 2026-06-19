@@ -40,3 +40,17 @@ export function epicLive(children: Task[], sessions: string[], signals: Record<s
   }
   return { running, needsInput };
 }
+
+/** Mission capacity: how many of the maxSessions slots are occupied by live running phases.
+ *  `running` is clamped to [0, max] so a stale in_progress child without a live session never
+ *  over-reports. `free` is the number of slots still open for the overseer to schedule into. */
+export function epicCapacity(children: Task[], sessions: string[], maxSessions: number): { running: number; max: number; free: number } {
+  let running = 0;
+  for (const c of children) {
+    const s = taskSessionName(c);
+    if (c.status === 'in_progress' && s && sessions.includes(s)) running++;
+  }
+  const max = Math.max(0, Math.floor(maxSessions));
+  const clamped = Math.min(running, max);
+  return { running: clamped, max, free: Math.max(0, max - clamped) };
+}

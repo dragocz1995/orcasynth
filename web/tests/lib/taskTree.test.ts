@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { epicChildren, phaseIds, epicProgress, epicLive } from '../../lib/taskTree';
+import { epicChildren, phaseIds, epicProgress, epicLive, epicCapacity } from '../../lib/taskTree';
 import type { Task } from '../../lib/types';
 
 const task = (over: Partial<Task> = {}): Task => ({ id: 't', title: 'T', status: 'open', ...over });
@@ -42,5 +42,26 @@ describe('epicLive', () => {
     ];
     const live = epicLive(children, ['orca-nova', 'orca-atlas'], { 'orca-atlas': { type: 'needs_input', question: '?' } });
     expect(live).toEqual({ running: 2, needsInput: 1 });
+  });
+});
+
+describe('epicCapacity', () => {
+  it('counts live running phases against the session cap, with free slots', () => {
+    const children = [
+      task({ id: 'a', status: 'in_progress', labels: ['agent:nova'] }),
+      task({ id: 'b', status: 'in_progress', labels: ['agent:atlas'] }),
+      task({ id: 'c', status: 'open', labels: ['agent:orion'] }), // not running yet
+      task({ id: 'd', status: 'in_progress', labels: ['agent:ghost'] }), // in_progress but no live session
+    ];
+    expect(epicCapacity(children, ['orca-nova', 'orca-atlas'], 2)).toEqual({ running: 2, max: 2, free: 0 });
+    expect(epicCapacity(children, ['orca-nova', 'orca-atlas'], 3)).toEqual({ running: 2, max: 3, free: 1 });
+    expect(epicCapacity(children, [], 2)).toEqual({ running: 0, max: 2, free: 2 });
+  });
+
+  it('clamps running to max (stale in_progress never over-reports) and floors max at 0', () => {
+    const children = [task({ id: 'a', status: 'in_progress', labels: ['agent:nova'] }), task({ id: 'b', status: 'in_progress', labels: ['agent:atlas'] })];
+    expect(epicCapacity(children, ['orca-nova', 'orca-atlas'], 1)).toEqual({ running: 1, max: 1, free: 0 });
+    expect(epicCapacity(children, ['orca-nova', 'orca-atlas'], 0)).toEqual({ running: 0, max: 0, free: 0 });
+    expect(epicCapacity(children, ['orca-nova', 'orca-atlas'], -2)).toEqual({ running: 0, max: 0, free: 0 });
   });
 });

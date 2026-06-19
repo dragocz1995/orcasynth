@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
 import DashPage from '../../app/dash/page';
+import { ToastProvider } from '../../components/ui/Toast';
 import { createWrapper } from '../test-utils';
 
 const server = setupServer(
@@ -15,9 +16,9 @@ beforeAll(() => server.listen()); afterAll(() => server.close());
 describe('DashPage', () => {
   it('renders live tasks and sessions, empty missions', async () => {
     const { wrapper: Wrapper } = createWrapper();
-    render(<Wrapper><DashPage /></Wrapper>);
+    render(<Wrapper><ToastProvider><DashPage /></ToastProvider></Wrapper>);
     await waitFor(() => expect(screen.getByText('Build')).toBeInTheDocument());
     expect(screen.getByText('orca-SwiftLake')).toBeInTheDocument();
-    expect(screen.getByText(/no active missions/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/no active missions/i).length).toBeGreaterThan(0);
   });
 });
