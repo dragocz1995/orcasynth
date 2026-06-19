@@ -82,6 +82,9 @@ export interface CliDetectionResult {
   freshInstall: FreshInstallInfo;
 }
 
+/** One entry in a project's file tree. */
+export interface FileNode { path: string; type: 'file' | 'dir' }
+
 /** Token/cost usage for a task's agent run, read from the executor CLI's local session storage. */
 export interface TokenUsage {
   input: number;

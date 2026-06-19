@@ -71,6 +71,15 @@ export const useProjects = () =>
 export const useProjectGit = (id: number | null) =>
   useQuery({ queryKey: ['project-git', id], queryFn: () => orcaClient.projectGit(id as number), enabled: !!id });
 
+export const useProjectFiles = (id: number | null) =>
+  useQuery({ queryKey: ['project-files', id], queryFn: () => orcaClient.projectFiles(id as number), enabled: !!id });
+
+export const useProjectFile = (id: number | null, path: string | null) =>
+  useQuery({ queryKey: ['project-file', id, path], queryFn: () => orcaClient.projectFile(id as number, path as string), enabled: !!id && !!path });
+
+export const useProjectFileDiff = (id: number | null, path: string | null) =>
+  useQuery({ queryKey: ['project-diff', id, path], queryFn: () => orcaClient.projectFileDiff(id as number, path as string), enabled: !!id && !!path });
+
 export const useHermesStatus = (home?: string) =>
   useQuery<HermesStatus>({
     queryKey: home ? ['hermes-status', home] : QUERY_KEYS.hermesStatus,

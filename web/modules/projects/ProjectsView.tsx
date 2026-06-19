@@ -12,10 +12,13 @@ import { Modal, ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { useTranslation } from '../../lib/i18n';
+import { Code2 } from 'lucide-react';
+import { ProjectEditor } from './ProjectEditor';
 
 export function ProjectsView() {
   const projects = useProjects();
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const git = useProjectGit(selectedId);
 
@@ -94,6 +97,14 @@ export function ProjectsView() {
             })}
           </div>
         )}
+
+      {selectedId && !editingId ? (
+        <div className="mt-4">
+          <Button variant="accent" icon={Code2} onClick={() => setEditingId(selectedId)}>{t.projects.openEditor}</Button>
+        </div>
+      ) : null}
+
+      {editingId ? <ProjectEditor projectId={editingId} onClose={() => setEditingId(null)} /> : null}
 
       {selectedId && git.data?.isRepo && (git.data.branches.length > 0 || git.data.commits.length > 0) && (
         <div className="mt-5 flex flex-col gap-5 rounded-lg border border-border bg-surface p-4" style={{ boxShadow: 'var(--shadow-card)' }}>

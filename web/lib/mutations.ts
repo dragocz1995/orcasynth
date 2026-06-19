@@ -98,6 +98,17 @@ export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (v: { slug: string; path: string; notes?: string }) => orcaClient.createProject(v), onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }) });
 }
+export function useWriteProjectFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: number; path: string; content: string }) => orcaClient.writeProjectFile(v.id, v.path, v.content),
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ['project-file', v.id, v.path] });
+      qc.invalidateQueries({ queryKey: ['project-diff', v.id, v.path] });
+      qc.invalidateQueries({ queryKey: ['project-git', v.id] });
+    },
+  });
+}
 export function useHermesInstall() {
   const qc = useQueryClient();
   return useMutation({

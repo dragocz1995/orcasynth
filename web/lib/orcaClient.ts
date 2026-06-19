@@ -1,4 +1,4 @@
-import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanResult, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage } from './types';
+import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanResult, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage, FileNode } from './types';
 import { getToken, clearToken } from './token';
 
 export const BASE = process.env.NEXT_PUBLIC_ORCA_URL ?? 'http://localhost:4400';
@@ -63,6 +63,10 @@ export const orcaClient = {
   projects: () => req<Project[]>('/projects'),
   createProject: (v: { slug: string; path: string; notes?: string }) => req<Project>('/projects', json(v)),
   projectGit: (id: number) => req<ProjectGit>(`/projects/${id}/git`),
+  projectFiles: (id: number) => req<FileNode[]>(`/projects/${id}/files`),
+  projectFile: (id: number, path: string) => req<{ content: string; truncated: boolean }>(`/projects/${id}/file?path=${encodeURIComponent(path)}`),
+  writeProjectFile: (id: number, path: string, content: string) => req<{ ok: boolean }>(`/projects/${id}/file`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path, content }) }),
+  projectFileDiff: (id: number, path: string) => req<{ diff: string }>(`/projects/${id}/diff?path=${encodeURIComponent(path)}`),
   hermesStatus: (home?: string) => req<HermesStatus>(`/integrations/hermes/status${home ? `?home=${encodeURIComponent(home)}` : ''}`),
   hermesInstall: (input: HermesInstallInput) => req<HermesInstallResult>('/integrations/hermes/install', json(input)),
   cliStatus: () => req<CliDetectionResult>('/integrations/cli-status'),
