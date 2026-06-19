@@ -1,0 +1,85 @@
+import { describe, it, expect } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { openDb } from '../../src/store/db.js';
+import { TaskStore } from '../../src/store/taskStore.js';
+import { Readiness } from '../../src/store/readiness.js';
+import { MissionStore } from '../../src/store/missionStore.js';
+import { EventBus } from '../../src/api/sse.js';
+import { createServer } from '../../src/api/server.js';
+import { FakeClock } from '../../src/shared/clock.js';
+import { ConfigStore } from '../../src/store/configStore.js';
+import { UserStore } from '../../src/store/userStore.js';
+import { ProjectStore } from '../../src/store/projectStore.js';
+import { UserProjectStore } from '../../src/store/userProjectStore.js';
+
+function setup() {
+  const db = openDb(':memory:');
+  db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+  const users = new UserStore(db);
+  const admin = users.create('admin', 'pw');
+  const bob = users.create('bob', 'pw');
+  const avatarsDir = mkdtempSync(join(tmpdir(), 'orca-av-'));
+  const app = createServer({
+    tasks: new TaskStore(db), readiness: new Readiness(db), missions: new MissionStore(db), bus: new EventBus(),
+    engine: null as never, spawn: null as never, tmux: null as never,
+    project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' },
+    clock: new FakeClock(0), config: new ConfigStore(db),
+    users, projects: new ProjectStore(db), userProjects: new UserProjectStore(db), avatarsDir,
+  });
+  return { app, bob, adminTok: users.issueToken(admin.id), bobTok: users.issueToken(bob.id) };
+}
+const auth = (t: string) => ({ headers: { authorization: `Bearer ${t}` } });
+const patch = (t: string, body: unknown) => ({ method: 'PATCH', headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+const put = (t: string, body: unknown) => ({ method: 'PUT', headers: { authorization: `Bearer ${t}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+describe('PATCH /auth/me — self-service profile', () => {
+  it('updates name, email and a valid preferred default executor', async () => {
+    const { app, bobTok } = setup();
+    const res = await app.request('/auth/me', patch(bobTok, { name: 'Bob B', email: 'bob@x.io', default_exec: 'sonnet' }));
+    expect(res.status).toBe(200);
+    const u = await res.json();
+    expect(u).toMatchObject({ name: 'Bob B', email: 'bob@x.io', default_exec: 'sonnet' });
+  });
+
+  it('rejects a default executor the user is not allowed to run', async () => {
+    const { app, bobTok } = setup();
+    expect((await app.request('/auth/me', patch(bobTok, { default_exec: 'bogus/model' }))).status).toBe(400);
+  });
+});
+
+describe('avatar upload + serve', () => {
+  it('stores an uploaded avatar and serves it back', async () => {
+    const { app, bob, bobTok } = setup();
+    const fd = new FormData();
+    fd.append('avatar', new File([new Uint8Array([1, 2, 3, 4])], 'me.png', { type: 'image/png' }));
+    const up = await app.request('/auth/me/avatar', { method: 'POST', headers: { authorization: `Bearer ${bobTok}` }, body: fd });
+    expect(up.status).toBe(200);
+    expect((await up.json()).avatar).toBe(`${bob.id}.png`);
+
+    const got = await app.request(`/users/${bob.id}/avatar`, auth(bobTok));
+    expect(got.status).toBe(200);
+    expect(got.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('rejects a non-image upload', async () => {
+    const { app, bobTok } = setup();
+    const fd = new FormData();
+    fd.append('avatar', new File([new Uint8Array([1, 2, 3])], 'x.txt', { type: 'text/plain' }));
+    expect((await app.request('/auth/me/avatar', { method: 'POST', headers: { authorization: `Bearer ${bobTok}` }, body: fd })).status).toBe(415);
+  });
+
+  it('404s when a user has no avatar', async () => {
+    const { app, bob, bobTok } = setup();
+    expect((await app.request(`/users/${bob.id}/avatar`, auth(bobTok))).status).toBe(404);
+  });
+});
+
+describe('PUT /config is admin-only', () => {
+  it('forbids a non-admin and allows the admin', async () => {
+    const { app, adminTok, bobTok } = setup();
+    expect((await app.request('/config', put(bobTok, { allowedExecs: ['sonnet'] }))).status).toBe(403);
+    expect((await app.request('/config', put(adminTok, { allowedExecs: ['sonnet'] }))).status).toBe(200);
+  });
+});

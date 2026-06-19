@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.db
+.env
+.next/
+*.log
+.superpowers/
+docs/superpowers/
+data/
+*.db-shm
+*.db-wal

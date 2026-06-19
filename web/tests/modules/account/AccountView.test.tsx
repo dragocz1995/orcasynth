@@ -1,0 +1,34 @@
+import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { setupServer } from 'msw/node';
+import { http, HttpResponse } from 'msw';
+import { onUnhandledRequest } from '../../msw';
+import { AccountView } from '../../../modules/account/AccountView';
+import { ToastProvider } from '../../../components/ui/Toast';
+import { createWrapper } from '../../test-utils';
+
+const server = setupServer();
+beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
+
+const meUser = (over: Record<string, unknown> = {}) => ({ id: 2, username: 'bob', name: '', email: '', avatar: '', default_exec: '', is_admin: false, allowed_execs: ['sonnet'], created_at: '2026-01-01', ...over });
+
+describe('AccountView', () => {
+  it('shows the user identity and their allowed models, and saves a chosen default', async () => {
+    let patched: Record<string, unknown> | null = null;
+    server.use(
+      http.get('*/auth/me', () => HttpResponse.json({ user: meUser() })),
+      http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], hiddenPresets: [], autopilot: {}, providers: {}, defaults: {} })),
+      http.patch('*/auth/me', async ({ request }) => { patched = await request.json() as Record<string, unknown>; return HttpResponse.json(meUser({ default_exec: 'sonnet' })); }),
+    );
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><AccountView /></ToastProvider></Wrapper>);
+
+    expect(await screen.findByText('@bob')).toBeTruthy();
+    // Restricted to 'sonnet' (admin allow-list) → only that model is pickable (a radio chip).
+    const chip = screen.getByRole('radio', { name: /Claude Sonnet/ });
+    fireEvent.click(chip);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patched?.default_exec).toBe('sonnet'));
+  });
+});
