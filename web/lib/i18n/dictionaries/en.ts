@@ -1,7 +1,7 @@
 export const en = {
   nav: {
     operate: 'Operate',
-    config: 'Config',
+    config: 'Administration',
     dash: 'Dash',
     tasks: 'Tasks',
     kanban: 'Kanban',
@@ -376,6 +376,8 @@ export const en = {
     defaults: 'Defaults',
     hermes: 'Hermes',
     sectionsNav: 'Settings sections',
+    adminOnly: 'Administrators only',
+    adminOnlyDesc: 'This section is reserved for admins. Edit your own profile in My account.',
     saveModels: 'Save models',
     saveAutopilot: 'Save autopilot',
     saveProviders: 'Save providers',
@@ -539,6 +541,20 @@ export const en = {
     allModelsHint: 'With none selected, the user may run any globally-allowed model.',
     modelsUpdated: 'Allowed models saved',
     updateError: 'Failed to save the change',
+  },
+  account: {
+    title: 'My account',
+    name: 'Name',
+    email: 'Email',
+    uploadAvatar: 'Upload avatar',
+    defaultModel: 'Default model',
+    defaultModelHint: 'Pre-filled for new tasks. Pick from the models you may run.',
+    restrictedHint: 'These models were allowed by your admin.',
+    noModelLimit: 'No limit — you can run any globally-allowed model.',
+    save: 'Save',
+    saved: 'Account saved',
+    avatarSaved: 'Avatar uploaded',
+    saveError: 'Save failed',
   },
   changes: {
     dirtyOne: '1 dirty',

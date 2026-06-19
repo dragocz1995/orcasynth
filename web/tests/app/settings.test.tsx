@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { setupServer } from 'msw/node';
 import { http, HttpResponse } from 'msw';
+import { onUnhandledRequest } from '../msw';
 import SettingsPage from '../../app/settings/page';
 import { ToastProvider } from '../../components/ui/Toast';
 import { createWrapper } from '../test-utils';
@@ -12,7 +13,7 @@ const server = setupServer(
   http.put('*/config', async ({ request }) => { putBody = await request.json(); return HttpResponse.json({ allowedExecs: ['sonnet'], customModels: [], autopilot: { model: 'mimo-v2.5', apiUrl: 'https://ai.coresynth.io/v1', apiKeySet: false, notes: '' }, defaults: { exec: 'sonnet', autonomy: 'L1', maxSessions: 1 } }); }),
   http.get('*/integrations/hermes/status', () => HttpResponse.json({ home: '/var/www/.hermes', exists: true, pluginsDir: true, pluginInstalled: true, enabled: false })),
 );
-beforeAll(() => server.listen()); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
+beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
 
 describe('SettingsPage', () => {
   it('loads config and saves a changed model allowlist', async () => {

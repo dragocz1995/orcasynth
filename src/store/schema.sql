@@ -24,7 +24,11 @@ CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')),
   is_admin INTEGER NOT NULL DEFAULT 0,
-  allowed_execs TEXT NOT NULL DEFAULT ''
+  allowed_execs TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT '',
+  avatar TEXT NOT NULL DEFAULT '',
+  default_exec TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS auth_tokens (
   token TEXT PRIMARY KEY, user_id INTEGER NOT NULL,

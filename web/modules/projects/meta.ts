@@ -6,5 +6,5 @@ export const meta: ModuleMeta = {
   label: 'Projects',
   route: '/projects',
   icon: FolderGit2,
-  group: 'Config',
+  group: 'Operate',
 };

@@ -5,10 +5,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Languages } from 'lucide-react';
 import { modulesByGroup } from '../../modules/registry';
 import { useSidebarState } from '../../lib/useSidebarState';
-import { useHealth, useTasks } from '../../lib/queries';
+import { useHealth, useTasks, useMe } from '../../lib/queries';
 import { useTranslation } from '../../lib/i18n';
 import { NavGroup } from './NavGroup';
 import { OpsStatusBar } from './OpsStatusBar';
+import { Avatar } from '../ui/Avatar';
 
 const RAIL = 56;
 const DAEMON_STATUS = {
@@ -22,6 +23,8 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
   const { collapsed, width, toggle, setWidth } = useSidebarState();
   const { data } = useHealth();
   const tasks = useTasks();
+  const me = useMe();
+  const isAdmin = me.data?.user.is_admin ?? false;
   const up = data?.ok === true;
   // ready = up & idle · busy = up & a task is actually in progress · fail = unreachable
   const working = (tasks.data ?? []).some((t) => t.status === 'in_progress');
@@ -81,7 +84,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {modulesByGroup().map((g) => {
+        {modulesByGroup().filter((g) => g.group !== 'Config' || isAdmin).map((g) => {
           const groupLabel = g.group === 'Operate' ? t.nav.operate : t.nav.config;
           return (
             <NavGroup
@@ -109,6 +112,22 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
       )}
 
       <OpsStatusBar expanded={expanded} />
+
+      {me.data?.user && (
+        <Link
+          href="/account"
+          className={`flex items-center border-t border-border px-4 py-3 transition-colors hover:bg-elevated ${expanded ? 'gap-2.5' : 'justify-center'}`}
+          title={me.data.user.name || me.data.user.username}
+        >
+          <Avatar user={me.data.user} size={expanded ? 30 : 26} />
+          {expanded && (
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-xs font-medium text-text">{me.data.user.name || me.data.user.username}</span>
+              <span className="truncate font-mono text-tiny text-text-muted">{me.data.user.is_admin ? t.users.admin : t.users.member}</span>
+            </div>
+          )}
+        </Link>
+      )}
 
       <div className={`flex items-center border-t border-border px-4 py-3 ${expanded ? 'gap-2.5' : 'justify-center'}`}>
         <span role="status" aria-label={up ? t.common.daemonUp : t.common.daemonDown} title={status === 'fail' ? t.common.daemonOffline : status === 'busy' ? t.common.daemonBusy : t.common.daemonReady} className="flex shrink-0 items-center justify-center">

@@ -1,9 +1,9 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { Db } from './db.js';
 
-export interface User { id: number; username: string; created_at: string; is_admin: boolean; allowed_execs: string[] }
-type Row = { id: number; username: string; created_at: string; is_admin: number; password_hash: string; allowed_execs: string };
-const mask = (r: Row): User => ({ id: r.id, username: r.username, created_at: r.created_at, is_admin: !!r.is_admin, allowed_execs: r.allowed_execs ? r.allowed_execs.split(',').filter(Boolean) : [] });
+export interface User { id: number; username: string; created_at: string; is_admin: boolean; allowed_execs: string[]; name: string; email: string; avatar: string; default_exec: string }
+type Row = { id: number; username: string; created_at: string; is_admin: number; password_hash: string; allowed_execs: string; name: string; email: string; avatar: string; default_exec: string };
+const mask = (r: Row): User => ({ id: r.id, username: r.username, created_at: r.created_at, is_admin: !!r.is_admin, allowed_execs: r.allowed_execs ? r.allowed_execs.split(',').filter(Boolean) : [], name: r.name ?? '', email: r.email ?? '', avatar: r.avatar ?? '', default_exec: r.default_exec ?? '' });
 
 function hashPassword(password: string): string {
   const salt = randomBytes(16);
@@ -46,6 +46,21 @@ export class UserStore {
   /** Set the per-user model allow-list (exec specs). Empty → no per-user restriction. */
   setAllowedExecs(id: number, execs: string[]): User | null {
     this.db.prepare('UPDATE users SET allowed_execs = ? WHERE id = ?').run(execs.join(','), id);
+    return this.get(id);
+  }
+  /** Self-service profile fields (name / email / preferred default executor). Only provided keys
+   *  are written, so a partial update leaves the rest untouched. */
+  setProfile(id: number, patch: { name?: string; email?: string; default_exec?: string }): User | null {
+    const sets: string[] = []; const p: Record<string, unknown> = { id };
+    if (typeof patch.name === 'string') { sets.push('name = @name'); p.name = patch.name; }
+    if (typeof patch.email === 'string') { sets.push('email = @email'); p.email = patch.email; }
+    if (typeof patch.default_exec === 'string') { sets.push('default_exec = @default_exec'); p.default_exec = patch.default_exec; }
+    if (sets.length > 0) this.db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = @id`).run(p);
+    return this.get(id);
+  }
+  /** Record the stored avatar filename (or '' to clear). */
+  setAvatar(id: number, filename: string): User | null {
+    this.db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(filename, id);
     return this.get(id);
   }
   get(id: number): User | null {

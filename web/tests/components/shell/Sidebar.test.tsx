@@ -13,12 +13,22 @@ beforeEach(() => localStorage.clear());
 
 describe('Sidebar (registry-driven)', () => {
   it('renders wordmark + groups + active item from the registry', () => {
-    const { wrapper: Wrapper } = createWrapper();
+    const { wrapper: Wrapper, client } = createWrapper();
+    // An admin sees the admin-only "Administration" group.
+    client.setQueryData(['me'], { user: { id: 1, username: 'admin', is_admin: true, allowed_execs: [], name: '', email: '', avatar: '', default_exec: '', created_at: '' } });
     render(<Wrapper><Sidebar /></Wrapper>);
     expect(screen.getByAltText('Orca')).toBeInTheDocument();
     expect(screen.getByText('Operate')).toBeInTheDocument();
-    expect(screen.getByText('Config')).toBeInTheDocument();
+    expect(screen.getByText('Administration')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Dash/ }).className).toContain('border-accent');
+  });
+
+  it('hides the Administration group from a non-admin', () => {
+    const { wrapper: Wrapper, client } = createWrapper();
+    client.setQueryData(['me'], { user: { id: 2, username: 'bob', is_admin: false, allowed_execs: [], name: '', email: '', avatar: '', default_exec: '', created_at: '' } });
+    render(<Wrapper><Sidebar /></Wrapper>);
+    expect(screen.getByText('Operate')).toBeInTheDocument();
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
   });
 
   it('shows the ops status bar counts: needs attention, live agents and last outcome', () => {

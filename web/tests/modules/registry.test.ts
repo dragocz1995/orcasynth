@@ -6,9 +6,9 @@ describe('module registry', () => {
     expect(MODULES.map((m) => m.route)).toEqual(['/dash', '/tasks', '/kanban', '/timeline', '/sessions', '/missions', '/settings', '/projects', '/users']);
     expect(MODULES.every((m) => typeof m.icon !== 'undefined')).toBe(true);
   });
-  it('groups Operate (6) and Config (3)', () => {
+  it('groups Operate (7) and Config (2)', () => {
     const groups = modulesByGroup();
-    expect(groups.find((g) => g.group === 'Operate')?.items.length).toBe(6);
-    expect(groups.find((g) => g.group === 'Config')?.items.map((m) => m.route)).toEqual(['/settings', '/projects', '/users']);
+    expect(groups.find((g) => g.group === 'Operate')?.items.length).toBe(7); // projects moved into Operate
+    expect(groups.find((g) => g.group === 'Config')?.items.map((m) => m.route)).toEqual(['/settings', '/users']);
   });
 });

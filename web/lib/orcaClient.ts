@@ -1,4 +1,4 @@
-import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanResult, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage, FileNode } from './types';
+import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanResult, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, ProfilePatch, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage, FileNode } from './types';
 import { getToken, clearToken } from './token';
 
 export const BASE = process.env.NEXT_PUBLIC_ORCA_URL ?? 'http://localhost:4400';
@@ -56,6 +56,10 @@ export const orcaClient = {
   login: (username: string, password: string) => req<AuthResult>('/auth/login', json({ username, password })),
   logout: () => req<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   me: () => req<{ user: User }>('/auth/me'),
+  updateMe: (patch: ProfilePatch) => req<User>('/auth/me', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }),
+  uploadAvatar: (file: File) => { const fd = new FormData(); fd.append('avatar', file); return req<User>('/auth/me/avatar', { method: 'POST', body: fd }); },
+  // Authenticated <img> src for a user's avatar (token in the query — an <img> can't set headers).
+  avatarUrl: (id: number) => `${BASE}/users/${id}/avatar?token=${encodeURIComponent(getToken() ?? '')}`,
   listUsers: () => req<User[]>('/users'),
   createUser: (username: string, password: string) => req<User>('/users', json({ username, password })),
   updateUser: (id: number, patch: UserPatch) => req<User>(`/users/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }),

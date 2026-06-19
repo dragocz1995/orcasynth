@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, type LucideIcon } from 'lucide-react';
+import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, type LucideIcon } from 'lucide-react';
 import { PROVIDERS, ProviderLogo, ProviderTag } from '../../modules/settings/providers';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { ModelModal } from '../../modules/settings/ModelModal';
 import { execProvider, execModel, type ProviderId } from '../../lib/modelProvider';
-import { useConfig, useHermesStatus } from '../../lib/queries';
+import { useConfig, useHermesStatus, useMe } from '../../lib/queries';
 import { useUpdateConfig, useHermesInstall } from '../../lib/mutations';
 import { orcaClient, OrcaApiError } from '../../lib/orcaClient';
 import { getToken } from '../../lib/token';
@@ -21,7 +21,7 @@ import { Segmented } from '../../components/ui/Segmented';
 import { SettingCard } from '../../components/ui/SettingCard';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { HelpTip } from '../../components/ui/HelpTip';
-import { LoadingState, ErrorState } from '../../components/ui/states';
+import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { ModuleShell } from '../../components/shell/ModuleShell';
 import '../../modules/settings/theme.css';
 import { useTranslation } from '../../lib/i18n';
@@ -35,6 +35,7 @@ type Category = 'models' | 'autopilot' | 'providers' | 'defaults' | 'hermes';
 export default function SettingsPage() {
   const config = useConfig();
   const update = useUpdateConfig();
+  const me = useMe();
   const { toast } = useToast();
   const { t } = useTranslation();
 
@@ -110,6 +111,8 @@ export default function SettingsPage() {
 
   if (config.isLoading) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><LoadingState /></ModuleShell>;
   if (config.isError) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><ErrorState message={t.common.daemonUnreachable} onRetry={() => config.refetch()} /></ModuleShell>;
+  // Administration surface — admins only. A non-admin who deep-links here gets a clear stop.
+  if (me.data && !me.data.user.is_admin) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><EmptyState title={t.settings.adminOnly} description={t.settings.adminOnlyDesc} icon={Lock} /></ModuleShell>;
 
   const toggle = (exec: string) => setAllowed((prev) => prev.includes(exec) ? prev.filter((e) => e !== exec) : [...prev, exec]);
   const apiKeySet = config.data?.autopilot.apiKeySet;

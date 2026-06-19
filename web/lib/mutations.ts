@@ -2,7 +2,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { orcaClient } from './orcaClient';
 import { QUERY_KEYS } from './queries';
-import type { CreateTaskInput, UpdateTaskInput, PlanInput, EngageInput, ConfigPatch, InsertPhasesInput, HermesInstallInput, UserPatch } from './types';
+import type { CreateTaskInput, UpdateTaskInput, PlanInput, EngageInput, ConfigPatch, InsertPhasesInput, HermesInstallInput, UserPatch, ProfilePatch } from './types';
 
 export function useSpawn() {
   const qc = useQueryClient();
@@ -101,6 +101,14 @@ export function useUpdateUser() {
     // Refresh the list and the current identity (an admin could change their own role).
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); qc.invalidateQueries({ queryKey: ['me'] }); },
   });
+}
+export function useUpdateMe() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (patch: ProfilePatch) => orcaClient.updateMe(patch), onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
+}
+export function useUploadAvatar() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (file: File) => orcaClient.uploadAvatar(file), onSuccess: () => qc.invalidateQueries({ queryKey: ['me'] }) });
 }
 export function useCreateProject() {
   const qc = useQueryClient();

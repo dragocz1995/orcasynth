@@ -1,7 +1,7 @@
 export const cs = {
   nav: {
     operate: 'Provoz',
-    config: 'Nastavení',
+    config: 'Administrace',
     dash: 'Přehled',
     tasks: 'Úkoly',
     kanban: 'Kanban',
@@ -376,6 +376,8 @@ export const cs = {
     defaults: 'Výchozí',
     hermes: 'Hermes',
     sectionsNav: 'Sekce nastavení',
+    adminOnly: 'Jen pro administrátory',
+    adminOnlyDesc: 'Tahle sekce je vyhrazená adminům. Svůj účet upravíš v Můj účet.',
     saveModels: 'Uložit modely',
     saveAutopilot: 'Uložit autopilota',
     saveProviders: 'Uložit poskytovatele',
@@ -539,6 +541,20 @@ export const cs = {
     allModelsHint: 'Bez výběru smí uživatel pouštět všechny globálně povolené modely.',
     modelsUpdated: 'Povolené modely uloženy',
     updateError: 'Nepodařilo se uložit změnu',
+  },
+  account: {
+    title: 'Můj účet',
+    name: 'Jméno',
+    email: 'E-mail',
+    uploadAvatar: 'Nahrát avatar',
+    defaultModel: 'Výchozí model',
+    defaultModelHint: 'Předvyplní se u nových tasků. Vyber z modelů, které smíš pouštět.',
+    restrictedHint: 'Tyto modely ti povolil admin.',
+    noModelLimit: 'Bez omezení — můžeš pouštět všechny globálně povolené modely.',
+    save: 'Uložit',
+    saved: 'Účet uložen',
+    avatarSaved: 'Avatar nahrán',
+    saveError: 'Uložení selhalo',
   },
   changes: {
     dirtyOne: '1 změněno',

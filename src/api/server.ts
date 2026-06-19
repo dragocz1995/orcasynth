@@ -1,4 +1,5 @@
 import { basename, join } from 'node:path';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { hermesStatus, installHermesPlugin } from '../integrations/hermesInstall.js';
 import { detectClis } from '../integrations/cliDetection.js';
@@ -43,6 +44,8 @@ export interface ServerDeps {
   projects?: ProjectStore;
   userProjects?: UserProjectStore;
   git?: GitReader;
+  /** Directory where uploaded user avatars are stored/served. Absent → avatar upload disabled. */
+  avatarsDir?: string;
   /** Factory for the planning LLM client; defaults to RelayClient. Overridable in tests. */
   makeInference?: (cfg: RelayConfig) => InferenceClient;
 }
@@ -82,6 +85,48 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     });
     app.post('/auth/logout', (c) => { const t = c.get('token'); if (t) users.revokeToken(t); return c.json({ ok: true }); });
     app.get('/auth/me', (c) => c.json({ user: c.get('user') }));
+    // Self-service profile: name / email / preferred default executor. A user edits only their own.
+    app.patch('/auth/me', async (c) => {
+      const u = c.get('user');
+      const b = await c.req.json() as { name?: string; email?: string; default_exec?: string };
+      if (typeof b.default_exec === 'string' && b.default_exec) {
+        // The preferred default must be one the user is actually allowed to run.
+        const globalOk = d.config.get().allowedExecs.includes(b.default_exec);
+        const personalOk = u.allowed_execs.length === 0 || u.allowed_execs.includes(b.default_exec);
+        if (!globalOk || !personalOk) return c.json({ error: 'exec not allowed' }, 400);
+      }
+      return c.json(users.setProfile(u.id, { name: b.name, email: b.email, default_exec: b.default_exec }));
+    });
+    // Avatar upload (multipart). Validated by type + size; stored as <userId>.<ext> under avatarsDir.
+    const AVATAR_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+    const AVATAR_MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
+    app.post('/auth/me/avatar', async (c) => {
+      if (!d.avatarsDir) return c.json({ error: 'avatars unavailable' }, 400);
+      const u = c.get('user');
+      const form = await c.req.formData();
+      const file = form.get('avatar');
+      if (!(file instanceof File)) return c.json({ error: 'avatar file required' }, 400);
+      const ext = AVATAR_EXT[file.type];
+      if (!ext) return c.json({ error: 'unsupported image type' }, 415);
+      if (file.size > 2 * 1024 * 1024) return c.json({ error: 'image too large (max 2MB)' }, 413);
+      mkdirSync(d.avatarsDir, { recursive: true });
+      // Drop any prior avatar of a different extension so a user never keeps two files.
+      for (const e of Object.values(AVATAR_EXT)) { if (e !== ext) { const f = join(d.avatarsDir, `${u.id}.${e}`); if (existsSync(f)) { try { unlinkSync(f); } catch { /* best-effort */ } } } }
+      const filename = `${u.id}.${ext}`;
+      writeFileSync(join(d.avatarsDir, filename), Buffer.from(await file.arrayBuffer()));
+      return c.json(users.setAvatar(u.id, filename));
+    });
+    // Serve a user's avatar bytes. Reachable as an <img> src via the ?token= query (auth accepts it).
+    app.get('/users/:id/avatar', (c) => {
+      if (!d.avatarsDir) return c.json({ error: 'not found' }, 404);
+      const target = users.get(Number(c.req.param('id')));
+      if (!target || !target.avatar) return c.json({ error: 'not found' }, 404);
+      const path = join(d.avatarsDir, target.avatar);
+      if (!existsSync(path)) return c.json({ error: 'not found' }, 404);
+      const ext = target.avatar.split('.').pop() ?? '';
+      const body = new Uint8Array(readFileSync(path)).buffer;
+      return c.body(body, 200, { 'content-type': AVATAR_MIME[ext] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
+    });
     app.get('/users', (c) => c.json(users.list()));
     app.post('/users', async (c) => {
       const { username, password } = await c.req.json();
@@ -644,7 +689,13 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
   });
 
   app.get('/config', (c) => c.json(d.config.get()));
-  app.put('/config', async (c) => { const patch = await c.req.json(); return c.json(d.config.update(patch)); });
+  app.put('/config', async (c) => {
+    // Editing the daemon config is admin-only (the Administration surface); reads stay open so the
+    // app can populate model pickers etc.
+    if (d.users) { const u = c.get('user'); if (!u || !d.users.isAdmin(u.id)) return c.json({ error: 'forbidden' }, 403); }
+    const patch = await c.req.json();
+    return c.json(d.config.update(patch));
+  });
 
   app.get('/events', c => streamSSE(c, async stream => {
     const off = d.bus.subscribe(e => void stream.writeSSE({ data: JSON.stringify(e), event: e.type }));
