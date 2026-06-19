@@ -13,6 +13,40 @@ import { useTranslation } from '../../lib/i18n';
 // Monaco is browser-only (web workers); never SSR it.
 const MonacoEditor = dynamic(() => import('@monaco-editor/react').then((m) => m.default), { ssr: false });
 
+/** Our OLED black Monaco theme — pure-black canvas + the app's accent/status colors, so the editor
+ *  matches the rest of the design instead of VS Code's grey. Defined before the editor mounts. */
+function defineOledTheme(monaco: { editor: { defineTheme: (n: string, t: unknown) => void } }) {
+  monaco.editor.defineTheme('orca-oled', {
+    base: 'vs-dark', inherit: true,
+    rules: [
+      { token: '', foreground: 'f5f5f5' },
+      { token: 'comment', foreground: '6a6a6a', fontStyle: 'italic' },
+      { token: 'string', foreground: '22c55e' },
+      { token: 'number', foreground: 'f59e0b' },
+      { token: 'keyword', foreground: '4d8bff' },
+      { token: 'type', foreground: '4d8bff' },
+      { token: 'delimiter', foreground: '9a9a9a' },
+      { token: 'tag', foreground: '4d8bff' },
+    ],
+    colors: {
+      'editor.background': '#000000',
+      'editor.foreground': '#f5f5f5',
+      'editorLineNumber.foreground': '#3a3a3a',
+      'editorLineNumber.activeForeground': '#9a9a9a',
+      'editor.lineHighlightBackground': '#0a0a0a',
+      'editor.selectionBackground': '#1d3a6e',
+      'editorCursor.foreground': '#4d8bff',
+      'editorGutter.background': '#000000',
+      'editorWidget.background': '#0a0a0a',
+      'editorWidget.border': '#2e2e2e',
+      'input.background': '#0a0a0a',
+      'dropdown.background': '#0a0a0a',
+      'editorIndentGuide.background1': '#161616',
+      'minimap.background': '#000000',
+    },
+  });
+}
+
 interface TreeNode { name: string; path: string; type: 'file' | 'dir'; children: TreeNode[] }
 
 /** Build a nested tree from the flat (dir-before-children, sorted) file list. */
@@ -151,11 +185,12 @@ export function ProjectEditor({ projectId, onClose }: { projectId: number; onClo
               <MonacoEditor
                 key={selected}
                 height="100%"
-                theme="vs-dark"
+                theme="orca-oled"
+                beforeMount={defineOledTheme}
                 language={langOf(selected)}
                 value={value}
                 onChange={(v) => setValue(v ?? '')}
-                options={{ fontSize: 13, minimap: { enabled: false }, scrollBeyondLastLine: false, automaticLayout: true }}
+                options={{ fontSize: 13, minimap: { enabled: false }, scrollBeyondLastLine: false, automaticLayout: true, padding: { top: 10 } }}
               />
             )}
         </div>
