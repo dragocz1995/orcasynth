@@ -62,4 +62,14 @@ describe('buildAgentCommand', () => {
     const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
     expect(cmd).not.toContain('ONE phase of a larger sequential mission');
   });
+  it('uses rawPrompt verbatim and skips the worker preamble (reasoning agents)', () => {
+    const cmd = buildAgentCommand(
+      { program: 'claude-code', model: 'opus' },
+      { projectPath: '/repo', taskId: 'pj-1', agentName: 'Pilot', rawPrompt: 'PLAN ONLY: do not implement', env: { ORCA_PLAN_JOB: 'pj-1' } },
+    );
+    expect(cmd).toContain('--model opus');
+    expect(cmd).toContain("'PLAN ONLY: do not implement'");
+    expect(cmd).toContain('export ORCA_PLAN_JOB=');
+    expect(cmd).not.toContain('orca close'); // no close-command preamble for reasoning agents
+  });
 });

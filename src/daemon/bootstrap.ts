@@ -9,6 +9,9 @@ import { Scheduler } from '../overseer/scheduler.js';
 import { sweepFinishedSessions } from '../overseer/janitor.js';
 import { sweepStuckTasks, deadAgentTasks } from '../overseer/stuckDetector.js';
 import { decidePrompt, decideTask, isDestructive, MIN_CONFIDENCE } from '../overseer/decision.js';
+import { PlanJobStore } from '../overseer/planJob.js';
+import { DecisionQueue } from '../overseer/decisionQueue.js';
+import { makePilot } from '../overseer/pilotAgent.js';
 import { RelayClient } from '../inference/client.js';
 import { Deriver } from '../deriver/deriver.js';
 import { EventBus } from '../api/sse.js';
@@ -81,6 +84,11 @@ export function buildApp(opts: BuildOpts) {
       return { approve: d.approve && d.confidence >= MIN_CONFIDENCE, destructive: d.destructive };
     },
   });
+  // Shared reasoning stores: the async planning job registry and the per-mission decision queue.
+  // The Pilot spawns a repo-aware planning agent for agent-mode plan jobs (relay path needs none).
+  const planJobs = new PlanJobStore();
+  const decisionQueue = new DecisionQueue();
+  const pilot = makePilot({ spawn, config, projects, nameAgent: uniqueName });
   const scheduler = new Scheduler({ tasks, spawn, bus, projects, fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: uniqueName, clock: new SystemClock() });
   // Deriver resolves a session's task via the agent registry / in-progress task (simplified: first in_progress child).
   // Resolve a session's task via its agent:<name> label. Agent names recur across missions,
@@ -114,7 +122,7 @@ export function buildApp(opts: BuildOpts) {
     console.warn('[orca] SETUP MODE — no users yet; the API is open until the first admin is created via onboarding');
   }
   const avatarsDir = opts.dbPath === ':memory:' ? undefined : join(dirname(opts.dbPath), 'avatars');
-  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users, projects, userProjects, git, avatarsDir });
+  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users, projects, userProjects, git, avatarsDir, planJobs, decisionQueue, pilot });
 
   // Root-cause recovery: after a daemon crash/restart, tasks left 'in_progress' whose tmux
   // session is gone are zombies — revert them to 'open' so they can be picked up again. No grace

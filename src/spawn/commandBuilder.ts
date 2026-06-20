@@ -18,17 +18,20 @@ export interface SpawnCtx {
   bin?: string;
   /** Extra CLI args inserted after the model flag (configured per provider in Settings). */
   extraArgs?: string;
+  /** When set, used verbatim as the agent prompt instead of the assembled worker preamble. Used by
+   *  reasoning agents (Pilot/Overseer) that own their own instructions and close nothing. */
+  rawPrompt?: string;
 }
 
 const esc = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 
 export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
-  const cd = `cd ${esc(ctx.projectPath)}`;
+  // A reasoning agent (Pilot/Overseer) carries its own complete prompt and never closes a task, so
+  // it bypasses the worker preamble entirely. Returning early keeps that path obvious.
+  if (ctx.rawPrompt !== undefined) {
+    return buildLaunchCommand(spec, ctx, ctx.rawPrompt);
+  }
   const closeCommand = ctx.closeCommand ?? `orca close ${ctx.taskId}`;
-  const envExport = ctx.env && Object.keys(ctx.env).length > 0
-    ? Object.entries(ctx.env).map(([k, v]) => `export ${k}=${esc(v)}`).join(' && ') + ' && '
-    : '';
-  const extra = ctx.extraArgs && ctx.extraArgs.trim() ? ` ${ctx.extraArgs.trim()}` : '';
   const titlePart = ctx.taskTitle ? `: ${ctx.taskTitle}` : '';
   const detailsPart = ctx.taskDescription && ctx.taskDescription.trim() ? `\n\nDetails:\n${ctx.taskDescription.trim()}` : '';
   // A phase agent must NOT redo earlier phases. Without this it sees the whole goal in its details
@@ -60,7 +63,17 @@ export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
       `If any sibling phase is still open or in progress, do NOT touch the epic — that agent will handle it.`,
     );
   }
-  const prompt = lines.join('\n');
+  return buildLaunchCommand(spec, ctx, lines.join('\n'));
+}
+
+/** Assemble the actual `cd && export … && <bin> … <prompt>` shell command for a given prompt. Shared
+ *  by the worker path (assembled preamble) and the reasoning path (rawPrompt). */
+function buildLaunchCommand(spec: AgentSpec, ctx: SpawnCtx, prompt: string): string {
+  const cd = `cd ${esc(ctx.projectPath)}`;
+  const envExport = ctx.env && Object.keys(ctx.env).length > 0
+    ? Object.entries(ctx.env).map(([k, v]) => `export ${k}=${esc(v)}`).join(' && ') + ' && '
+    : '';
+  const extra = ctx.extraArgs && ctx.extraArgs.trim() ? ` ${ctx.extraArgs.trim()}` : '';
   if (spec.program.startsWith('opencode')) {
     const bin = ctx.bin || 'opencode';
     // Launch the interactive TUI (UI mode) with the task preloaded into the composer
