@@ -402,17 +402,41 @@ Content-Type: application/json
 }
 ```
 
-Uses the configured autopilot LLM to decompose a goal into ordered implementation phases. Each phase becomes a task, chained sequentially via dependencies. Optionally engages a mission immediately.
+Decomposes a goal into ordered implementation phases. Each phase becomes a task, chained sequentially via dependencies. Optionally engages a mission immediately.
 
-When `phases` is supplied (manual mode), the LLM is bypassed and the supplied phases are used directly. When `dryRun` is true, phases are returned without persisting anything. When `prompt` is set, it overrides the saved autopilot prompt template.
+**Autopilot mode is asynchronous** (it may run a relay model or spawn a repo-aware Pilot agent),
+so it returns a **plan job** (`202`) you poll at `GET /plan/:jobId` (or watch via the `plan` SSE
+event). The relay backend resolves the job inline before responding; an agent backend (`pilotExec`
+set) resolves it once the Pilot submits via `orca plan submit`.
 
-**Response `201`**
+When `phases` is supplied (**manual mode**), the LLM is bypassed and the supplied phases are
+persisted synchronously — that path still returns `201` with `{ epic, phases, mission? }`. When
+`dryRun` is true the job records the phases without persisting (confirm later with
+`POST /plan/:jobId/confirm`). When `prompt` is set, it overrides the saved autopilot prompt template.
+
+**Response `202`** (autopilot)
+```json
+{ "jobId": "pj-1a2b3c", "epicId": "my-project-..." }
+```
+The `epicId` is present once the job has persisted its epic (relay path); for an agent backend it
+arrives later via the job/SSE. Poll the job:
+
+```http
+GET /plan/:jobId
+```
+```json
+{ "id": "pj-1a2b3c", "epicId": "my-project-...", "goal": "Build a login page...",
+  "status": "done", "phases": [ { "title": "Set up OAuth provider", "type": "feature" } ] }
+```
+`status` is `planning` | `done` | `failed`. Related routes: `POST /plan/:jobId/submit`
+`{ phases }` (used by the Pilot agent) and `POST /plan/:jobId/confirm` (persist a dryRun preview).
+
+**Response `201`** (manual mode)
 ```json
 {
   "epic": { "id": "my-project-...", "title": "Build a login page...", "type": "epic", ... },
   "phases": [
-    { "id": "my-project-...", "title": "Set up OAuth provider", "status": "open", ... },
-    { "id": "my-project-...", "title": "Create login form", "status": "open", ... }
+    { "id": "my-project-...", "title": "Set up OAuth provider", "status": "open", ... }
   ],
   "mission": { "id": "m-...", "state": "active", ... }
 }
@@ -722,6 +746,26 @@ Sets state to `disengaged` and kills all associated agent sessions.
 { "ok": true }
 ```
 
+### Overseer long-poll (parked agent)
+
+Used by the parked per-mission Overseer agent when `overseerExec` is configured. The agent blocks on
+`next` until a decision is needed (or a heartbeat), then answers via `decide`. No model output is
+parsed — the agent posts a structured verdict; the local destructive heuristic stays authoritative.
+
+```http
+GET /missions/:id/overseer/next
+```
+Blocks until a decision is pending, then returns `{ id, kind, context }` (`kind` ∈ `task` | `prompt`
+| `review`); returns `{}` on a heartbeat. `?timeoutMs=<ms>` (capped 30 000) shortens the long-poll.
+
+```http
+POST /missions/:id/overseer/decide
+Content-Type: application/json
+
+{ "id": "<decision id>", "approve": true, "confidence": 0.8, "rationale": "looks safe" }
+```
+Resolves the awaiting decision. **Response `200`** `{ "ok": true }`, or `404` `{ "error": "no such decision" }`.
+
 ---
 
 ## Activity log
@@ -765,6 +809,9 @@ GET /config
   "autopilot": {
     "model": "gpt-4o-mini",
     "overseerModel": "",
+    "pilotExec": "",
+    "overseerExec": "",
+    "reviewOnDone": false,
     "apiUrl": "https://api.openai.com/v1",
     "apiKeySet": false,
     "notes": "",
@@ -777,6 +824,15 @@ GET /config
   }
 }
 ```
+
+Per-role reasoning backends (all default off → unchanged relay behaviour):
+
+- **`autopilot.pilotExec`** — when set to an exec string (e.g. `claude:opus`), the **Pilot** runs as a
+  repo-aware CLI agent that submits its plan via `orca plan submit`. Empty → the relay model decomposes inline.
+- **`autopilot.overseerExec`** — when set, the **Overseer** runs as a parked per-mission CLI agent that
+  long-polls `GET /missions/:id/overseer/next`. Empty → decisions use the relay (`overseerModel`/`model`).
+- **`autopilot.reviewOnDone`** — when `true` (and an agent Overseer is configured), each closed mission
+  phase enqueues a post-done review for the Overseer to judge. Default `false`.
 
 ### Update config
 
@@ -828,6 +884,14 @@ data: {"type": "signal", "session": "orca-Agent0", "signal": {"type": "working"}
 ```
 
 Signal types: `working`, `needs_input`, `complete` (from the deriver).
+
+**plan** (async planning job)
+```
+event: plan
+data: {"type": "plan", "jobId": "pj-1a2b3c", "status": "done", "epicId": "my-project-...", "phases": [ ... ]}
+```
+Emitted as a plan job transitions `planning` → `done` | `failed`. The web uses it to render the
+plan as soon as the Pilot (or relay) resolves the job; `GET /plan/:jobId` is the poll fallback.
 
 ---
 
