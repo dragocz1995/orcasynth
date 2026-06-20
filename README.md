@@ -11,6 +11,7 @@ completion. It ships a REST API, a CLI, and a real-time web UI.
 [![CI](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml/badge.svg)](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-43853d.svg)](https://nodejs.org)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 
 </div>
 
@@ -115,8 +116,13 @@ See [`docs/DEVELOPMENT.md`](./docs/DEVELOPMENT.md) and [`docs/TESTING.md`](./doc
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) and the
-[Code of Conduct](./CODE_OF_CONDUCT.md).
+Contributors are welcome — whether it's a bug fix, a new feature, or just an idea.
+
+- 💡 **Have a suggestion?** Open a [feature request](https://github.com/dragocz1995/orcasynth/issues/new?template=feature_request.md) and tell us what would make Orcasynth better.
+- 🐛 **Found a bug?** File a [bug report](https://github.com/dragocz1995/orcasynth/issues/new?template=bug_report.md).
+- 🔧 **Want to hack on it?** Read [CONTRIBUTING.md](./CONTRIBUTING.md), open a PR, and check the [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+Star the repo if you find it useful — it helps others discover the project.
 
 ## License
 
