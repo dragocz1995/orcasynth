@@ -6,8 +6,8 @@ import { parseAnsi } from '../../modules/sessions/ansi';
 import { useTranslation } from '../../lib/i18n';
 
 /** Live, ANSI-coloured tail of a tmux session's pane — the single source of truth for the
- *  "what is the agent doing right now" preview. Polls only while mounted, flashes its edge on
- *  fresh output, and is optionally clickable (onExpand → open the full terminal). */
+ *  "what is the agent doing right now" preview. Polls only while mounted, and is optionally
+ *  clickable (onExpand → open the full terminal). */
 export function LiveTail({ name, lines = 20, heightClass = 'max-h-80', onExpand }: {
   name: string;
   /** How many trailing pane rows to show — bigger = more of the agent's work visible. */
@@ -19,18 +19,6 @@ export function LiveTail({ name, lines = 20, heightClass = 'max-h-80', onExpand 
 }) {
   const { t } = useTranslation();
   const { tail, isLoading } = useSessionPane(name, lines);
-
-  // Flash the edge whenever fresh output streams in.
-  const [flash, setFlash] = useState(false);
-  const prev = useRef(tail);
-  useEffect(() => {
-    if (prev.current === tail) return;
-    prev.current = tail;
-    if (!tail) return;
-    setFlash(true);
-    const id = setTimeout(() => setFlash(false), 600);
-    return () => clearTimeout(id);
-  }, [tail]);
 
   // Full-screen TUIs (opencode) draw a wide, box-drawn layout that mangles if it wraps. Keep the
   // pane unwrapped and shrink the whole thing to fit the panel width so the entire UI stays visible.
@@ -55,8 +43,7 @@ export function LiveTail({ name, lines = 20, heightClass = 'max-h-80', onExpand 
   const pane = (
     <div
       ref={boxRef}
-      data-flash={flash ? 'true' : undefined}
-      className={`tail-live ${heightClass} overflow-auto`}
+      className={`${heightClass} overflow-auto`}
     >
       <div className="overflow-hidden" style={{ height: fit.h || undefined }}>
         <pre
