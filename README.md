@@ -2,11 +2,15 @@
 
 # Orcasynth
 
-**Plan, spawn, and oversee autonomous AI coding agents — in your own terminal.**
+**Control autonomous coding agents — without losing control.**
 
-Orcasynth is a self-hosted daemon that turns a goal into a plan, runs coding agents
-(Claude Code, OpenCode, Codex) in isolated `tmux` sessions, and supervises them to
-completion. It ships a REST API, a CLI, and a real-time web UI.
+Plan work, launch isolated coding agents, watch every session, and step in
+before risky changes reach your codebase.
+
+`Plan · Dispatch · Observe · Intervene`
+
+Orcasynth is a self-hosted daemon that runs coding agents (Claude Code, OpenCode,
+Codex) in isolated `tmux` sessions — with a REST API, a CLI, and a real-time web UI.
 
 [![CI](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml/badge.svg)](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
