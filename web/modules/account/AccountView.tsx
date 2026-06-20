@@ -36,7 +36,7 @@ export function AccountView() {
     }
   }, [me.data]);
 
-  if (me.isLoading || !me.data) {
+  if (me.isLoading || !me.data?.user) {
     return <><ModuleHeader title={t.account.title} icon={UserCog} /><LoadingState /></>;
   }
 

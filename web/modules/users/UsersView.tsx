@@ -146,7 +146,7 @@ export function UsersView() {
 
   const data = users.data ?? [];
   // The bootstrap admin (explicit is_admin flag) manages roles, project assignments and model access.
-  const isAdmin = me.data?.user.is_admin ?? false;
+  const isAdmin = me.data?.user?.is_admin ?? false;
   const globalExecs = config.data?.allowedExecs ?? [];
   const customModels = config.data?.customModels ?? [];
 

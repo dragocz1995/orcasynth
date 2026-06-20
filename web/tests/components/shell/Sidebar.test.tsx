@@ -23,6 +23,14 @@ describe('Sidebar (registry-driven)', () => {
     expect(screen.getByRole('link', { name: /Dash/ }).className).toContain('border-accent');
   });
 
+  it('renders without crashing in setup mode (me resolved but no user yet)', () => {
+    const { wrapper: Wrapper, client } = createWrapper();
+    client.setQueryData(['me'], { user: undefined }); // /auth/me in setup mode returns { user: undefined }
+    expect(() => render(<Wrapper><Sidebar /></Wrapper>)).not.toThrow();
+    expect(screen.getByText('Operate')).toBeInTheDocument();
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
+  });
+
   it('hides the Administration group from a non-admin', () => {
     const { wrapper: Wrapper, client } = createWrapper();
     client.setQueryData(['me'], { user: { id: 2, username: 'bob', is_admin: false, allowed_execs: [], name: '', email: '', avatar: '', default_exec: '', created_at: '' } });
