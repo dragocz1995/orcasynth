@@ -7,7 +7,7 @@ import { AgentStore } from '../../src/store/agentStore.js';
 
 const OC_DIALOG = `△ Permission required\n Allow once   Allow always   Reject  ⇆ select  enter confirm`;
 
-function setup(autonomy: string | null = null, decideApproval?: DeriverDecider) {
+function setup(autonomy: string | null = null, decideApproval?: DeriverDecider, missionFor?: (session: string) => string | null) {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
   const tasks = new TaskStore(db); const agents = new AgentStore(db);
   tasks.create({ id: 'orca-1', project_id: 1, title: 'T' }); tasks.setStatus('orca-1', 'in_progress');
@@ -19,11 +19,12 @@ function setup(autonomy: string | null = null, decideApproval?: DeriverDecider) 
     sink: { emit: (s, sig) => emitted.push({ s, sig }) },
     sessionTaskId: () => 'orca-1',
     autonomyFor: () => autonomy,
+    missionFor,
     decideApproval,
   });
   return { tmux, deriver, emitted };
 }
-type DeriverDecider = (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string }) => Promise<{ approve: boolean; destructive: boolean }>;
+type DeriverDecider = (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ approve: boolean; destructive: boolean }>;
 
 describe('Deriver permission handling', () => {
   it('L3 / manual: sends Enter once and emits working (dedup on repeat)', async () => {
@@ -60,5 +61,12 @@ describe('Deriver permission handling', () => {
     await deriver.tick();
     expect(tmux.sentKeys('orca-TestAgent')).toEqual([]); // destructive → no auto-press
     expect(emitted.at(-1)!.sig.type).toBe('needs_input');
+  });
+
+  it('passes the session mission id into decideApproval', async () => {
+    let seen: string | null = 'unset';
+    const { deriver } = setup('L3', async (input) => { seen = input.missionId; return { approve: true, destructive: false }; }, () => 'm-ep');
+    await deriver.tick();
+    expect(seen).toBe('m-ep');
   });
 });
