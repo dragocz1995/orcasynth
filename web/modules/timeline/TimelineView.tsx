@@ -221,7 +221,7 @@ function LiveFeedGroup({ target, title, exec, href, ts, autopilot, open, onToggl
         <span className="absolute bottom-2.5 right-3 font-mono text-text-muted" style={{ fontSize: 'var(--text-caption)' }}>{clock(ts)}</span>
       </button>
       {open && (
-        <pre className="tail-live max-h-80 overflow-auto whitespace-pre-wrap break-all border-t border-border bg-bg p-2.5 font-mono text-xs leading-relaxed text-text-muted">
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-all border-t border-border bg-bg p-2.5 font-mono text-xs leading-relaxed text-text-muted">
           {tail ? parseAnsi(tail).map((s, i) => <span key={i} style={s.color ? { color: s.color } : undefined}>{s.text}</span>) : '…'}
         </pre>
       )}

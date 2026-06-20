@@ -8,7 +8,7 @@ describe('sweepFinishedSessions', () => {
     await tmux.spawn('orca-Done', { cwd: '/o', command: 'x' });
     await tmux.spawn('orca-Running', { cwd: '/o', command: 'x' });
     await tmux.spawn('orca-Unknown', { cwd: '/o', command: 'x' });
-    await tmux.spawn('other-app', { cwd: '/o', command: 'x' }); // foreign — never touched
+    await tmux.spawn('jat-Other', { cwd: '/o', command: 'x' }); // foreign — never touched
     const statuses: Record<string, string> = { 'orca-Done': 'closed', 'orca-Running': 'in_progress' };
     const reaped = await sweepFinishedSessions({
       tmux,
@@ -18,7 +18,7 @@ describe('sweepFinishedSessions', () => {
     const live = await tmux.list();
     expect(live).toContain('orca-Running'); // in-progress kept
     expect(live).toContain('orca-Unknown'); // no task → kept (don't reap unknown)
-    expect(live).toContain('other-app');    // foreign kept
+    expect(live).toContain('jat-Other');    // foreign kept
     expect(live).not.toContain('orca-Done');
   });
 });

@@ -1,11 +1,20 @@
 export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'closed' | 'cancelled';
 export interface Task { id: string; title: string; status: TaskStatus; type?: string; priority?: string; labels?: string[]; description?: string; scheduled_at?: string | null; autostart?: number; result_summary?: string | null; outcome?: string | null; closed_at?: string | null; created_at?: string; parent_id?: string | null }
 export interface Session { name: string }
+export type SessionRole = 'overseer' | 'pilot' | 'agent';
+/** Structured identity of a live agent session, classified by the daemon (single source of truth).
+ *  Clients render from `role` — they never parse meaning out of the raw session name. */
+export interface SessionInfo { name: string; role: SessionRole; agent: string; missionId?: string }
 export interface Mission { id: string; epic_id: string; autonomy: string; max_sessions: number; state: string }
 export interface CreateTaskInput { title: string; type?: string; priority?: string; description?: string; scheduled_at?: string | null; autostart?: number; deps?: string[] }
 export interface UpdateTaskInput { title?: string; type?: string; priority?: string; description?: string; scheduled_at?: string | null; autostart?: number; deps?: string[] }
 export interface PlanInput { goal: string; exec?: string; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title: string; type?: string }[] }
 export interface PlanResult { epic: Task; phases: Task[]; mission?: Mission }
+export interface PlanPhase { title: string; type: string; agent?: string; details?: string }
+export type PlanJobStatus = 'planning' | 'done' | 'failed';
+export interface PlanJob { id: string; epicId: string | null; goal: string; status: PlanJobStatus; phases: PlanPhase[]; error?: string }
+/** Autopilot planning is async: the endpoint returns a job to poll. Manual mode still returns a PlanResult. */
+export type PlanSubmitResult = { jobId: string; epicId?: string } | PlanResult;
 export interface InsertPhasesInput { phases?: { title: string; type?: string }[]; goal?: string; exec?: string; prompt?: string }
 export interface InsertPhasesResult { epic: Task; phases: Task[] }
 export interface EngageInput { epicId: string; autonomy: string; maxSessions: number; clearedGuardrails: string[] }
@@ -14,7 +23,7 @@ export interface OrcaConfig {
   allowedExecs: string[];
   customModels: { label: string; exec: string }[];
   hiddenPresets: string[];
-  autopilot: { model: string; overseerModel: string; apiUrl: string; apiKeySet: boolean; notes: string; prompt: string };
+  autopilot: { model: string; overseerModel: string; apiUrl: string; apiKeySet: boolean; notes: string; prompt: string; pilotExec: string; overseerExec: string; reviewOnDone: boolean };
   providers: Record<string, { bin: string; args: string }>;
   defaults: { exec: string; autonomy: string; maxSessions: number };
 }
@@ -22,7 +31,7 @@ export interface ConfigPatch {
   allowedExecs?: string[];
   customModels?: { label: string; exec: string }[];
   hiddenPresets?: string[];
-  autopilot?: { model?: string; overseerModel?: string; apiUrl?: string; apiKey?: string; notes?: string; prompt?: string };
+  autopilot?: { model?: string; overseerModel?: string; apiUrl?: string; apiKey?: string; notes?: string; prompt?: string; pilotExec?: string; overseerExec?: string; reviewOnDone?: boolean };
   providers?: Record<string, { bin: string; args: string }>;
   defaults?: { exec?: string; autonomy?: string; maxSessions?: number };
 }

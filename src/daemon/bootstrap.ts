@@ -9,6 +9,11 @@ import { Scheduler } from '../overseer/scheduler.js';
 import { sweepFinishedSessions } from '../overseer/janitor.js';
 import { sweepStuckTasks, deadAgentTasks } from '../overseer/stuckDetector.js';
 import { decidePrompt, decideTask, isDestructive, MIN_CONFIDENCE } from '../overseer/decision.js';
+import type { TaskContext } from '../overseer/decision.js';
+import { PlanJobStore } from '../overseer/planJob.js';
+import { DecisionQueue } from '../overseer/decisionQueue.js';
+import { makePilot } from '../overseer/pilotAgent.js';
+import { makeOverseer } from '../overseer/overseerAgent.js';
 import { RelayClient } from '../inference/client.js';
 import { Deriver } from '../deriver/deriver.js';
 import { EventBus } from '../api/sse.js';
@@ -69,17 +74,36 @@ export function buildApp(opts: BuildOpts) {
     if (!key) return null;
     return new RelayClient({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.overseerModel || cfg.autopilot.model });
   };
+  // Shared reasoning stores: the async planning job registry and the per-mission decision queue.
+  // The Pilot spawns a repo-aware planning agent for agent-mode plan jobs (relay path needs none);
+  // the Overseer parks a per-mission agent that long-polls the decision queue.
+  const planJobs = new PlanJobStore();
+  const decisionQueue = new DecisionQueue();
+  const pilot = makePilot({ spawn, config, projects, nameAgent: uniqueName });
+  const overseer = makeOverseer({ spawn, tmux, config, queue: decisionQueue });
+
+  // A task/prompt decision resolves through ONE of two backends, chosen by config:
+  //   • overseerExec set → enqueue on the per-mission queue; the parked agent answers (or it times
+  //     out to a conservative escalate). The local destructive heuristic is carried at enqueue and
+  //     stays authoritative — never trusted from the agent.
+  //   • overseerExec empty → the existing relay path (or blanket approve when no key).
+  const decideTaskDep = async (missionId: string, input: TaskContext) => {
+    if (config.get().autopilot.overseerExec) {
+      const localDestructive = isDestructive(`${input.title} ${input.description ?? ''}`);
+      const v = await decisionQueue.enqueue(missionId, 'task', { ...input }, localDestructive);
+      return { approve: v.approve && v.confidence >= MIN_CONFIDENCE && !v.destructive, destructive: v.destructive };
+    }
+    const inf = overseerClient();
+    if (!inf) return { approve: true, destructive: false };
+    const d = await decideTask(inf, input);
+    return { approve: d.approve && d.confidence >= MIN_CONFIDENCE, destructive: d.destructive };
+  };
+
   const engine = new MissionEngine({
     tasks, readiness, missions, spawn, tmux, bus, projects,
     fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: uniqueName, clock: new SystemClock(),
-    // Overseer LLM gate for guardrail-triggering tasks. No relay → no-op (approve, non-destructive)
-    // so the boolean guardrail behaviour is unchanged; with a relay, escalate on deny/low-confidence.
-    decideTask: async (input) => {
-      const inf = overseerClient();
-      if (!inf) return { approve: true, destructive: false };
-      const d = await decideTask(inf, input);
-      return { approve: d.approve && d.confidence >= MIN_CONFIDENCE, destructive: d.destructive };
-    },
+    decideTask: decideTaskDep,
+    overseer,
   });
   const scheduler = new Scheduler({ tasks, spawn, bus, projects, fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: uniqueName, clock: new SystemClock() });
   // Deriver resolves a session's task via the agent registry / in-progress task (simplified: first in_progress child).
@@ -91,17 +115,32 @@ export function buildApp(opts: BuildOpts) {
     const matches = tasks.list().filter((t) => t.labels.includes(`agent:${name}`));
     return matches[matches.length - 1] ?? null;
   };
+  // The active mission owning a session (via its task's parent epic), or null for a manual launch.
+  const missionIdForSession = (session: string): string | null => {
+    const t = taskForSession(session);
+    if (!t?.parent_id) return null;
+    return missions.active().find((m) => m.epic_id === t.parent_id)?.id ?? null;
+  };
   const deriver = new Deriver({
     tmux, agents, tasks, sink: bus, clock: new SystemClock(),
-    sessionTaskId: (session) => taskForSession(session)?.id ?? tasks.list({ status: 'in_progress' })[0]?.id ?? null,
+    // Resolve strictly via the agent:<name> label. No global "first in-progress task" fallback:
+    // the parked Overseer (orca-overseer-<id>) and the Pilot have no task row, and the fallback would
+    // mis-attribute their panes — even pressing accept-keys into the Overseer's TUI. Unresolved → skip.
+    sessionTaskId: (session) => taskForSession(session)?.id ?? null,
     autonomyFor: (session) => {
       const t = taskForSession(session);
       if (!t?.parent_id) return null;
       return missions.active().find((m) => m.epic_id === t.parent_id)?.autonomy ?? null;
     },
-    // Overseer decision: use the configured relay to judge auto-cleared prompts. Without a key,
-    // fall back to blanket auto-approve while still honouring the local destructive heuristic.
+    missionFor: missionIdForSession,
+    // Overseer decision for an auto-cleared prompt — same two-backend split as decideTaskDep: the
+    // parked agent (queue) when overseerExec is set and the prompt belongs to a mission, else relay.
     decideApproval: async (input) => {
+      if (input.missionId && config.get().autopilot.overseerExec) {
+        const localDestructive = isDestructive(`${input.question} ${input.context}`);
+        const v = await decisionQueue.enqueue(input.missionId, 'prompt', { question: input.question, context: input.context, options: input.options }, localDestructive);
+        return { approve: v.approve && v.confidence >= MIN_CONFIDENCE && !v.destructive, destructive: v.destructive };
+      }
       const inf = overseerClient();
       if (!inf) return { approve: true, destructive: isDestructive(`${input.question} ${input.context}`) };
       const d = await decidePrompt(inf, input);
@@ -114,7 +153,7 @@ export function buildApp(opts: BuildOpts) {
     console.warn('[orca] SETUP MODE — no users yet; the API is open until the first admin is created via onboarding');
   }
   const avatarsDir = opts.dbPath === ':memory:' ? undefined : join(dirname(opts.dbPath), 'avatars');
-  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users, projects, userProjects, git, avatarsDir });
+  const app = createServer({ tasks, readiness, missions, engine, spawn, tmux, bus, events, project: opts.project, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new SystemClock(), config, users, projects, userProjects, git, avatarsDir, planJobs, decisionQueue, pilot });
 
   // Root-cause recovery: after a daemon crash/restart, tasks left 'in_progress' whose tmux
   // session is gone are zombies — revert them to 'open' so they can be picked up again. No grace
@@ -127,9 +166,29 @@ export function buildApp(opts: BuildOpts) {
     }
   };
 
+  // After a restart the parked overseers are gone (their tmux sessions died with the daemon). When an
+  // agent overseer is configured, re-park one per active mission and kill any orphan overseer session
+  // whose mission is no longer active. Inert when overseerExec is empty (relay handles decisions).
+  const reconcileOverseers = async () => {
+    if (!config.get().autopilot.overseerExec) return;
+    const live = new Set((await tmux.list()).filter((s) => s.startsWith('orca-overseer-')));
+    const activeIds = new Set(missions.active().map((m) => m.id));
+    for (const s of live) {
+      const id = s.replace('orca-overseer-', '');
+      if (!activeIds.has(id)) await tmux.kill(s).catch(() => { /* already gone */ });
+    }
+    for (const m of missions.active()) {
+      if (live.has(`orca-overseer-${m.id}`)) continue;
+      const epic = tasks.get(m.epic_id);
+      const proj = epic ? projects.get(epic.project_id) : null;
+      if (proj) await overseer.start(m.id, proj.id, proj.path);
+    }
+  };
+
   const startLoops = () => {
     const clock = new SystemClock();
     void reconcileZombies(); // one-shot zombie sweep on startup
+    void reconcileOverseers(); // re-park overseers for active missions / kill orphans
     const stopDeriver = deriver.start();
     const stopOverseer = clock.setInterval(() => { for (const m of missions.live()) void engine.tick(m.id); }, 90000);
     const stopScheduler = clock.setInterval(() => { void scheduler.tick(); }, 30000);

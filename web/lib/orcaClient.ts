@@ -1,4 +1,4 @@
-import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanResult, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, ProfilePatch, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage, FileNode } from './types';
+import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanSubmitResult, PlanJob, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, ProfilePatch, AuthResult, ActivityEvent, Project, ProjectGit, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, TokenUsage, FileNode, SessionInfo } from './types';
 import { getToken, clearToken } from './token';
 
 export const BASE = process.env.NEXT_PUBLIC_ORCA_URL ?? 'http://localhost:4400';
@@ -26,7 +26,7 @@ const json = (body: unknown): RequestInit => ({ method: 'POST', headers: { 'cont
 export const orcaClient = {
   tasks: () => req<Task[]>('/tasks'),
   ready: () => req<Task[]>('/tasks/ready'),
-  sessions: () => req<string[]>('/sessions'),
+  sessions: () => req<SessionInfo[]>('/sessions'),
   missions: () => req<Mission[]>('/missions'),
   getMissionDetail: (id: string) => req<MissionDetail>(`/missions/${encodeURIComponent(id)}`),
   health: () => req<{ ok: boolean }>('/health'),
@@ -37,8 +37,9 @@ export const orcaClient = {
   taskDeps: (id: string) => req<string[]>(`/tasks/${encodeURIComponent(id)}/deps`),
   taskUsage: (id: string) => req<TokenUsage | null>(`/tasks/${encodeURIComponent(id)}/usage`),
   allDeps: () => req<{ task_id: string; depends_on_id: string }[]>('/tasks/deps'),
-  planTask: (input: PlanInput) => req<PlanResult>('/tasks/plan', json(input)),
-  planPreview: (input: { goal: string; prompt?: string }) => req<{ phases: { title: string; type: string; agent?: string; details?: string }[] }>('/tasks/plan', json({ ...input, dryRun: true })),
+  planTask: (input: PlanInput) => req<PlanSubmitResult>('/tasks/plan', json(input)),
+  planPreview: (input: { goal: string; prompt?: string }) => req<{ jobId: string }>('/tasks/plan', json({ ...input, dryRun: true })),
+  getPlanJob: (jobId: string) => req<PlanJob>(`/plan/${encodeURIComponent(jobId)}`),
   insertPhases: (epicId: string, input: InsertPhasesInput) => req<InsertPhasesResult>(`/tasks/${encodeURIComponent(epicId)}/phases`, json(input)),
   engage: (input: EngageInput) => req<Mission>('/missions', json(input)),
   spawn: (input: { taskId: string; exec?: string }) => req<{ session: string }>('/sessions', json(input)),
@@ -68,6 +69,7 @@ export const orcaClient = {
   activity: (opts?: { limit?: number; type?: string }) => req<ActivityEvent[]>(`/activity?${new URLSearchParams({ ...(opts?.limit ? { limit: String(opts.limit) } : {}), ...(opts?.type ? { type: opts.type } : {}) }).toString()}`),
   projects: () => req<Project[]>('/projects'),
   createProject: (v: { slug: string; path: string; notes?: string }) => req<Project>('/projects', json(v)),
+  updateProject: (id: number, patch: { path?: string; notes?: string }) => req<Project>(`/projects/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch) }),
   projectGit: (id: number) => req<ProjectGit>(`/projects/${id}/git`),
   projectFiles: (id: number) => req<FileNode[]>(`/projects/${id}/files`),
   projectFile: (id: number, path: string) => req<{ content: string; truncated: boolean }>(`/projects/${id}/file?path=${encodeURIComponent(path)}`),

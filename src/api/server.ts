@@ -17,7 +17,12 @@ import type { TmuxDriver } from '../tmux/types.js';
 import type { EventBus } from './sse.js';
 import type { AgentSpec } from '../spawn/commandBuilder.js';
 import { resolveExecutor } from '../overseer/routing.js';
-import { decompose, VALID_TYPES as VALID_PHASE_TYPES } from '../overseer/planner.js';
+import { decompose, parsePhases, VALID_TYPES as VALID_PHASE_TYPES, type Phase } from '../overseer/planner.js';
+import { classifySession } from '../overseer/sessionInfo.js';
+import { isDestructive } from '../overseer/decision.js';
+import { PlanJobStore, type PlanJob } from '../overseer/planJob.js';
+import { DecisionQueue } from '../overseer/decisionQueue.js';
+import type { Task } from '../store/types.js';
 import { RelayClient } from '../inference/client.js';
 import type { InferenceClient, RelayConfig } from '../inference/types.js';
 import { uniqueName } from '../daemon/uniqueName.js';
@@ -48,9 +53,19 @@ export interface ServerDeps {
   avatarsDir?: string;
   /** Factory for the planning LLM client; defaults to RelayClient. Overridable in tests. */
   makeInference?: (cfg: RelayConfig) => InferenceClient;
+  /** Async planning job registry (relay or agent backend resolves into it). Defaulted when absent. */
+  planJobs?: PlanJobStore;
+  /** Per-mission decision queue consumed by the parked overseer agent (long-poll). Defaulted when absent. */
+  decisionQueue?: DecisionQueue;
+  /** Spawn the Pilot agent for an agent-mode plan job (Task 9). Absent → relay-only planning. */
+  pilot?: (job: PlanJob, projectPath: string) => Promise<void>;
 }
 
 export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; token: string } }> {
+  // Core reasoning stores are optional in deps for back-compat with existing call sites/tests; the
+  // daemon (bootstrap) injects shared instances. Default here so every route has a working store.
+  const planJobs = d.planJobs ?? new PlanJobStore();
+  const decisionQueue = d.decisionQueue ?? new DecisionQueue();
   const app = new Hono<{ Variables: { user: User; token: string } }>();
   app.use('*', cors());
   app.get('/health', c => c.json({ ok: true }));
@@ -242,6 +257,62 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     return { project: { id: p.id, path: p.path } };
   };
 
+  // Persist a plan job's phases as an epic + chained child tasks. Creates the epic when the job has
+  // no epicId yet; otherwise appends after the epic's current tail (leaves = phases nothing depends
+  // on). For a fresh epic there are no descendants, so the first new phase simply starts the chain.
+  // Single source of truth for both initial planning and replan (DRY with the old inline blocks).
+  function persistPlan(job: PlanJob): { epic: Task; phases: Task[] } {
+    const path = pathFor(job.projectId);
+    const newId = () => `${basename(path)}-${randomBytes(4).toString('hex')}`;
+    const epicId = job.epicId ?? newId();
+    let epic = d.tasks.get(epicId);
+    if (!epic) {
+      epic = d.tasks.create({ id: epicId, project_id: job.projectId, title: job.goal, type: 'epic', description: job.goal });
+      d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
+    }
+    const existing = d.tasks.descendants(epic.id);
+    const dependedOn = new Set(d.tasks.depsAmong(existing.map((t) => t.id)).map((e) => e.depends_on_id));
+    const leaves = existing.map((t) => t.id).filter((id) => !dependedOn.has(id));
+    const overallGoal = epic.description?.trim() || epic.title;
+    const created: Task[] = [];
+    let prevId: string | null = null;
+    for (const ph of job.phases) {
+      const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${overallGoal}` : `Overall goal: ${overallGoal}`;
+      const child = d.tasks.create({ id: newId(), project_id: job.projectId, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: childDesc });
+      if (prevId) d.tasks.addDep(child.id, prevId); // chain within the new batch
+      else for (const leaf of leaves) d.tasks.addDep(child.id, leaf); // first new phase waits on the tail
+      if (job.exec) d.tasks.setExec(child.id, job.exec);
+      d.bus.publish({ type: 'task', taskId: child.id, status: child.status });
+      created.push(child);
+      prevId = child.id;
+    }
+    return { epic, phases: created };
+  }
+
+  // Finalize an async plan job: a dryRun job records phases without persisting; otherwise persist the
+  // epic+children, optionally engage a mission, tick an already-active mission so it picks up the new
+  // ready phase, and announce the result over SSE. Shared by the relay path and the agent submit path.
+  async function finalizePlanJob(jobId: string, phases: Phase[]): Promise<void> {
+    const job = planJobs.get(jobId);
+    if (!job) return;
+    if (job.dryRun) {
+      planJobs.setPhases(jobId, phases);
+      d.bus.publish({ type: 'plan', jobId, status: 'done', phases });
+      return;
+    }
+    job.phases = phases;
+    const { epic, phases: created } = persistPlan(job);
+    job.epicId = epic.id;
+    planJobs.setPhases(jobId, phases);
+    if (job.engage) {
+      await d.engine.engage({ epicId: epic.id, autonomy: job.engage.autonomy, maxSessions: job.engage.maxSessions, clearedGuardrails: [] });
+    } else {
+      const missionId = `m-${epic.id}`;
+      if (d.engine?.isActive(missionId)) await d.engine.tick(missionId); // replan into a live mission
+    }
+    d.bus.publish({ type: 'plan', jobId, status: 'done', epicId: epic.id, phases: created.map((t) => ({ title: t.title, type: t.type })) });
+  }
+
   app.get('/projects', (c) => {
     const all = d.projects ? d.projects.list() : [];
     if (!d.userProjects || !d.users) return c.json(all);
@@ -257,6 +328,18 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const { slug, path, notes } = await c.req.json();
     try { return c.json(d.projects.create({ slug, path, notes }), 201); }
     catch { return c.json({ error: 'slug taken' }, 409); }
+  });
+  // Edit a project's path / Pilot notes (slug stays immutable). Admin-only, like registration.
+  app.patch('/projects/:id', async (c) => {
+    if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);
+    if (d.userProjects && d.users) { const u = c.get('user'); if (!u || !d.userProjects.isAdmin(u.id)) return c.json({ error: 'forbidden' }, 403); }
+    const id = Number(c.req.param('id'));
+    if (!d.projects.get(id)) return c.json({ error: 'project not found' }, 404);
+    const b = await c.req.json() as { path?: string; notes?: string };
+    const patch: { path?: string; notes?: string } = {};
+    if (typeof b.path === 'string' && b.path.trim()) patch.path = b.path.trim();
+    if (typeof b.notes === 'string') patch.notes = b.notes;
+    return c.json(d.projects.update(id, patch));
   });
   app.get('/projects/:id/git', async (c) => {
     if (!d.projects || !d.git) return c.json({ error: 'projects unavailable' }, 400);
@@ -442,6 +525,26 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       if (b.status === 'closed') d.tasks.close(id, { summary: b.result_summary, outcome: b.outcome });
       else d.tasks.setStatus(id, b.status);
       d.bus.publish({ type: 'task', taskId: id, status: b.status });
+      // Post-done review (opt-in): when a mission phase closes, let the parked overseer judge the
+      // outcome. Non-blocking (void) — it must never delay the agent's close. Default off, and only
+      // active with an agent overseer configured. A rejected/destructive verdict blocks the phase(s)
+      // waiting on this one, so a bad result halts the mission for a human instead of rolling on.
+      const cfg = d.config.get();
+      if (b.status === 'closed' && existing.parent_id && cfg.autopilot.reviewOnDone && cfg.autopilot.overseerExec) {
+        const mission = d.missions.active().find((m) => m.epic_id === existing.parent_id);
+        if (mission) {
+          const localDestructive = isDestructive(`${existing.title} ${b.result_summary ?? ''}`);
+          void decisionQueue.enqueue(mission.id, 'review', { title: existing.title, outcome: b.outcome ?? '', summary: b.result_summary ?? '' }, localDestructive)
+            .then((verdict) => {
+              if (verdict.approve && !verdict.destructive) return;
+              for (const e of d.tasks.allDeps()) {
+                if (e.depends_on_id !== id) continue;
+                const dep = d.tasks.get(e.task_id);
+                if (dep && dep.status === 'open') { d.tasks.setStatus(dep.id, 'blocked'); d.bus.publish({ type: 'task', taskId: dep.id, status: 'blocked' }); }
+              }
+            });
+        }
+      }
     }
     if (typeof b.exec === 'string') { d.tasks.setExec(id, b.exec); }
     if (typeof b.title === 'string' || typeof b.type === 'string' || typeof b.priority === 'string' || typeof b.description === 'string' || b.scheduled_at !== undefined || b.autostart !== undefined) {
@@ -470,49 +573,69 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const target = resolveTarget(c, b.project_id);
     if ('error' in target) return c.json({ error: target.error }, target.status);
 
-    let phases: { title: string; type: string; agent?: string; details?: string }[];
+    // Manual mode: explicit phases → synchronous create (no LLM, no key). Keeps the 201 contract.
     if (Array.isArray(b.phases) && b.phases.length > 0) {
-      // Manual mode: phases supplied by the client — no LLM, no key required.
-      phases = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
+      const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
       if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
-    } else {
-      // Autopilot mode: decompose the goal via the configured relay model.
-      const cfg = d.config.get();
-      const key = d.config.apiKey();
-      if (!key) return c.json({ error: 'autopilot_key_missing' }, 400);
-      const inf = (d.makeInference ?? ((rc) => new RelayClient(rc)))({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
-      try {
-        // A playground request may pass a prompt override to test an unsaved template.
-        phases = await decompose(inf, goal, b.prompt ?? cfg.autopilot.prompt);
-      } catch {
-        return c.json({ error: 'plan_parse_failed' }, 502);
-      }
+      if (b.dryRun === true) return c.json({ phases }); // playground preview, nothing persisted
+      const job = planJobs.create({ goal, projectId: target.project.id, epicId: null, dryRun: false, exec: b.exec });
+      job.phases = phases;
+      const { epic, phases: created } = persistPlan(job);
+      job.epicId = epic.id;
+      planJobs.setPhases(job.id, phases);
+      let mission;
+      if (b.engage === true) mission = await d.engine.engage({ epicId: epic.id, autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1, clearedGuardrails: [] });
+      return c.json({ epic, phases: created.map((t) => d.tasks.get(t.id)), mission }, 201);
     }
 
-    // Playground: return the decomposition without persisting anything.
-    if (b.dryRun === true) return c.json({ phases });
-
-    const newId = () => `${basename(target.project.path)}-${randomBytes(4).toString('hex')}`;
-    const epic = d.tasks.create({ id: newId(), project_id: target.project.id, title: goal, type: 'epic', description: goal });
-    d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
-    const created: typeof epic[] = [];
-    for (const ph of phases) {
-      // Children carry the phase details (acceptance) plus the overall goal as context.
-      const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${goal}` : `Overall goal: ${goal}`;
-      const child = d.tasks.create({ id: newId(), project_id: target.project.id, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: childDesc });
-      const prev = created[created.length - 1];
-      if (prev) d.tasks.addDep(child.id, prev.id); // sequential: phase n depends on n-1
-      if (b.exec) d.tasks.setExec(child.id, b.exec);
-      d.bus.publish({ type: 'task', taskId: child.id, status: child.status });
-      created.push(child);
+    // Autopilot mode: always async via a plan job — one path for the relay and the agent backends.
+    const cfg = d.config.get();
+    const job = planJobs.create({
+      goal, projectId: target.project.id, epicId: null, dryRun: b.dryRun === true, exec: b.exec,
+      engage: b.engage === true ? { autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1 } : undefined,
+    });
+    d.bus.publish({ type: 'plan', jobId: job.id, status: 'planning' });
+    if (cfg.autopilot.pilotExec && d.pilot) {
+      // Agent backend: spawn the Pilot in the repo; it submits via `orca plan submit`.
+      void d.pilot(job, target.project.path).catch((e) => { planJobs.fail(job.id, String(e)); d.bus.publish({ type: 'plan', jobId: job.id, status: 'failed', error: String(e) }); });
+      return c.json({ jobId: job.id }, 202);
     }
-
-    let mission;
-    if (b.engage === true) {
-      mission = await d.engine.engage({ epicId: epic.id, autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1, clearedGuardrails: [] });
+    // Relay backend: decompose inline and resolve the job before responding.
+    const key = d.config.apiKey();
+    if (!key) return c.json({ error: 'autopilot_key_missing' }, 400);
+    const inf = (d.makeInference ?? ((rc) => new RelayClient(rc)))({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
+    let phases: Phase[];
+    try {
+      const notes = d.projects?.get(target.project.id)?.notes;
+      phases = await decompose(inf, goal, b.prompt ?? cfg.autopilot.prompt, { notes });
+    } catch {
+      planJobs.fail(job.id, 'plan_parse_failed');
+      d.bus.publish({ type: 'plan', jobId: job.id, status: 'failed', error: 'plan_parse_failed' });
+      return c.json({ jobId: job.id, error: 'plan_parse_failed' }, 502);
     }
-    return c.json({ epic, phases: created.map((t) => d.tasks.get(t.id)), mission }, 201);
+    await finalizePlanJob(job.id, phases);
+    return c.json({ jobId: job.id, epicId: planJobs.get(job.id)?.epicId ?? null }, 202);
   });
+
+  app.get('/plan/:jobId', (c) => {
+    const job = planJobs.get(c.req.param('jobId'));
+    if (!job) return c.json({ error: 'not found' }, 404);
+    if (!canAccessProject(c, job.projectId)) return c.json({ error: 'forbidden' }, 403);
+    return c.json(job);
+  });
+
+  app.post('/plan/:jobId/submit', async (c) => {
+    const job = planJobs.get(c.req.param('jobId'));
+    if (!job) return c.json({ error: 'not found' }, 404);
+    if (!canAccessProject(c, job.projectId)) return c.json({ error: 'forbidden' }, 403);
+    const body = await c.req.json().catch(() => ({})) as { phases?: unknown };
+    let phases: Phase[];
+    try { phases = parsePhases(JSON.stringify(body.phases ?? [])); } // reuse the relay validator (DRY)
+    catch { return c.json({ error: 'invalid phases' }, 400); }
+    await finalizePlanJob(job.id, phases);
+    return c.json(planJobs.get(job.id));
+  });
+
 
   // Insert phases into an existing epic — a manual list of phases, or `goal` to replan
   // (decompose a residual goal). New phases run AFTER the epic's current chain; an active
@@ -526,54 +649,44 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     if (b.exec && !d.config.get().allowedExecs.includes(b.exec)) return c.json({ error: 'exec not allowed' }, 400);
     if (b.exec && !execAllowedForUser(c, b.exec)) return c.json({ error: 'exec not allowed for user' }, 403);
 
-    let phases: { title: string; type: string; agent?: string; details?: string }[];
+    // Manual insert: explicit phases, no LLM, no key. persistPlan appends after the epic's tail.
     if (Array.isArray(b.phases) && b.phases.length > 0) {
-      // Manual insert: explicit phases, no LLM, no key required.
-      phases = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
+      const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
       if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
-    } else if ((b.goal ?? '').trim()) {
-      // Replan: decompose the residual goal via the configured relay model.
-      const cfg = d.config.get();
-      const key = d.config.apiKey();
-      if (!key) return c.json({ error: 'autopilot_key_missing' }, 400);
-      const inf = (d.makeInference ?? ((rc) => new RelayClient(rc)))({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
-      try { phases = await decompose(inf, b.goal!.trim(), b.prompt ?? cfg.autopilot.prompt); }
-      catch { return c.json({ error: 'plan_parse_failed' }, 502); }
-    } else {
-      return c.json({ error: 'phases or goal required' }, 400);
+      const job = planJobs.create({ goal: epic.description?.trim() || epic.title, projectId: epic.project_id, epicId, dryRun: false, exec: b.exec });
+      job.phases = phases;
+      const { phases: created } = persistPlan(job);
+      const missionId = `m-${epicId}`;
+      if (d.engine?.isActive(missionId)) await d.engine.tick(missionId); // pick up the new ready phase
+      return c.json({ epic, phases: created.map((t) => d.tasks.get(t.id)) }, 201);
     }
+    if (!(b.goal ?? '').trim()) return c.json({ error: 'phases or goal required' }, 400);
 
-    // Chain new phases after the epic's current tail: the first new phase waits on the existing
-    // leaf phase(s) (those nothing else depends on), then new phases chain sequentially.
-    const existing = d.tasks.descendants(epicId);
-    const dependedOn = new Set(d.tasks.depsAmong(existing.map((t) => t.id)).map((e) => e.depends_on_id));
-    const leaves = existing.map((t) => t.id).filter((id) => !dependedOn.has(id));
-    const overallGoal = epic.description?.trim() || epic.title;
-    // Children inherit the epic's project (not the daemon home) so phases added to a non-home epic
-    // land in the right project and get a matching id prefix.
-    const newId = () => `${basename(pathFor(epic.project_id))}-${randomBytes(4).toString('hex')}`;
-    const created: ReturnType<typeof d.tasks.create>[] = [];
-    let prevId: string | null = null;
-    for (const ph of phases) {
-      const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${overallGoal}` : `Overall goal: ${overallGoal}`;
-      const child = d.tasks.create({ id: newId(), project_id: epic.project_id, title: ph.title, type: ph.type, parent_id: epicId, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: childDesc });
-      if (prevId) d.tasks.addDep(child.id, prevId);
-      else for (const leaf of leaves) d.tasks.addDep(child.id, leaf);
-      if (b.exec) d.tasks.setExec(child.id, b.exec);
-      d.bus.publish({ type: 'task', taskId: child.id, status: child.status });
-      created.push(child);
-      prevId = child.id;
+    // Replan: decompose the residual goal — async via a plan job scoped to this epic (so an agent
+    // Pilot can do it; finalizePlanJob appends + ticks an active mission). One path, relay or agent.
+    const cfg = d.config.get();
+    const job = planJobs.create({ goal: b.goal!.trim(), projectId: epic.project_id, epicId, dryRun: false, exec: b.exec });
+    d.bus.publish({ type: 'plan', jobId: job.id, status: 'planning' });
+    if (cfg.autopilot.pilotExec && d.pilot) {
+      void d.pilot(job, pathFor(epic.project_id)).catch((e) => { planJobs.fail(job.id, String(e)); d.bus.publish({ type: 'plan', jobId: job.id, status: 'failed', error: String(e) }); });
+      return c.json({ jobId: job.id, epicId }, 202);
     }
-
-    // If a mission is already driving this epic, let it pick up the new ready phase immediately.
-    const missionId = `m-${epicId}`;
-    if (d.engine && d.engine.isActive(missionId)) await d.engine.tick(missionId);
-
-    return c.json({ epic, phases: created.map((t) => d.tasks.get(t.id)) }, 201);
+    const key = d.config.apiKey();
+    if (!key) return c.json({ error: 'autopilot_key_missing' }, 400);
+    const inf = (d.makeInference ?? ((rc) => new RelayClient(rc)))({ baseUrl: cfg.autopilot.apiUrl, apiKey: key, model: cfg.autopilot.model });
+    let phases: Phase[];
+    try { phases = await decompose(inf, b.goal!.trim(), b.prompt ?? cfg.autopilot.prompt, { notes: d.projects?.get(epic.project_id)?.notes }); }
+    catch {
+      planJobs.fail(job.id, 'plan_parse_failed');
+      d.bus.publish({ type: 'plan', jobId: job.id, status: 'failed', error: 'plan_parse_failed' });
+      return c.json({ jobId: job.id, error: 'plan_parse_failed' }, 502);
+    }
+    await finalizePlanJob(job.id, phases);
+    return c.json({ jobId: job.id, epicId }, 202);
   });
 
   // Hermes integration — install the bundled orca plugin into a same-host Hermes instance.
-  const hermesHome = (override?: string) => (override?.trim() || process.env.HERMES_HOME || '~/.hermes');
+  const hermesHome = (override?: string) => (override?.trim() || process.env.HERMES_HOME || '/var/www/.hermes');
   app.get('/integrations/hermes/status', c => c.json(hermesStatus(hermesHome(c.req.query('home')))));
   app.post('/integrations/hermes/install', async c => {
     const b = await c.req.json() as { home?: string; url?: string; token?: string; timeout?: number };
@@ -602,7 +715,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     return c.json(detectClis(ctx));
   });
 
-  app.get('/sessions', async c => c.json((await d.tmux.list()).filter((s) => s.startsWith('orca-'))));
+  app.get('/sessions', async c => c.json((await d.tmux.list()).filter((s) => s.startsWith('orca-')).map(classifySession)));
   app.post('/sessions', async (c) => {
     const { taskId, exec } = await c.req.json() as { taskId: string; exec?: string };
     if (exec && !d.config.get().allowedExecs.includes(exec)) return c.json({ error: 'exec not allowed' }, 400);
@@ -677,9 +790,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     if (action === 'pause') {
       await d.engine.pause(id); // kills running agents + reverts their tasks, then marks paused
     } else if (action === 'resume') {
-      d.missions.setState(id, 'active');
-      d.bus.publish({ type: 'mission', missionId: id, state: 'active' });
-      await d.engine.tick(id);
+      await d.engine.resume(id); // flips active, re-parks the overseer, then ticks
     }
     return c.json(d.missions.get(id));
   });
@@ -689,6 +800,39 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     if (!missionAccessible(c, mission.epic_id)) return c.json({ error: 'forbidden' }, 403);
     await d.engine.disengage(c.req.param('id'));
     return c.json({ ok: true });
+  });
+
+  // Overseer long-poll: the parked per-mission overseer agent polls `next` (blocks until a decision
+  // is needed or a heartbeat) and answers via `decide`. Decisions are keyed by mission id in the
+  // path; both sit behind the bearer middleware. No model output is parsed — the agent posts a
+  // structured verdict, and the local destructive heuristic stays authoritative (applied at enqueue).
+  // Gate the overseer routes by the mission's OWN project (not the daemon home project the GATED
+  // middleware checks) so a cross-project user can't read/answer another tenant's decisions. A
+  // non-existent mission id has nothing to leak, so it falls through (harmless heartbeat / no-op).
+  const overseerForbidden = (c: { get: (k: 'user') => User | undefined }, missionId: string): boolean => {
+    const mission = d.missions.get(missionId);
+    return !!mission && !missionAccessible(c, mission.epic_id);
+  };
+  app.get('/missions/:id/overseer/next', async (c) => {
+    const id = c.req.param('id');
+    if (overseerForbidden(c, id)) return c.json({ error: 'forbidden' }, 403);
+    const raw = Number(c.req.query('timeoutMs'));
+    const timeoutMs = Number.isFinite(raw) && raw > 0 ? Math.min(raw, 30_000) : undefined;
+    const req = await decisionQueue.next(id, timeoutMs);
+    return c.json(req ?? {});
+  });
+  app.post('/missions/:id/overseer/decide', async (c) => {
+    const id = c.req.param('id');
+    if (overseerForbidden(c, id)) return c.json({ error: 'forbidden' }, 403);
+    const b = await c.req.json().catch(() => ({})) as { id?: string; approve?: boolean; confidence?: number; rationale?: string };
+    if (!b.id) return c.json({ error: 'id required' }, 400);
+    const ok = decisionQueue.resolve(id, b.id, {
+      approve: b.approve === true,
+      confidence: typeof b.confidence === 'number' ? Math.max(0, Math.min(1, b.confidence)) : 0,
+      destructive: false, // never trusted from the agent — the enqueue-time heuristic is authoritative
+      rationale: typeof b.rationale === 'string' ? b.rationale : '',
+    });
+    return ok ? c.json({ ok: true }) : c.json({ error: 'no such decision' }, 404);
   });
 
   app.get('/config', (c) => c.json(d.config.get()));

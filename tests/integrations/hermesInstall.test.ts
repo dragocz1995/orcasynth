@@ -6,7 +6,7 @@ gateway:
   port: 8080
 plugins:
   enabled:
-  - example-tools
+  - coresynth-tools
   - instagram-agent
   disabled:
   - spotify
@@ -16,7 +16,7 @@ memory:
 
 describe('enabledPlugins', () => {
   it('extracts only the enabled list (not disabled or other keys)', () => {
-    expect(enabledPlugins(CONFIG)).toEqual(['example-tools', 'instagram-agent']);
+    expect(enabledPlugins(CONFIG)).toEqual(['coresynth-tools', 'instagram-agent']);
   });
   it('returns [] when there is no plugins block', () => {
     expect(enabledPlugins('gateway:\n  port: 8080\n')).toEqual([]);
@@ -29,7 +29,7 @@ describe('enableInConfig', () => {
     expect(changed).toBe(true);
     expect(already).toBe(false);
     expect(enabledPlugins(text)).toContain('orca');
-    expect(enabledPlugins(text)).toContain('example-tools'); // others kept
+    expect(enabledPlugins(text)).toContain('coresynth-tools'); // others kept
     expect(text).toContain('# Hermes config'); // comments survive
     expect(text).toContain('disabled:'); // untouched
     expect(text).toContain('backend: mem0');

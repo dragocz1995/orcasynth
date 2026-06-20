@@ -8,9 +8,10 @@ describe('buildAgentCommand', () => {
     expect(cmd).toContain('--prompt'); // UI mode: task preloaded into the composer
     expect(cmd).not.toContain('opencode run'); // not headless
   });
-  it('routes a bare model to claude', () => {
+  it('routes a bare model to claude with an autonomous approval bypass', () => {
     const cmd = buildAgentCommand({ program: 'claude-code', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
     expect(cmd).toContain('--model sonnet');
+    expect(cmd).toContain('--dangerously-skip-permissions');
   });
   it('routes codex with a positional prompt and autonomous approval bypass', () => {
     const cmd = buildAgentCommand({ program: 'codex', model: 'gpt-5.4' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
@@ -61,5 +62,20 @@ describe('buildAgentCommand', () => {
   it('gives a standalone task the plain implement instruction (no phase framing)', () => {
     const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
     expect(cmd).not.toContain('ONE phase of a larger sequential mission');
+  });
+  it('tells the agent to give long shell commands a generous timeout (opencode kills short-timeout commands)', () => {
+    const cmd = buildAgentCommand({ program: 'opencode', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+    expect(cmd).toContain('1200000 ms');
+  });
+  it('uses rawPrompt verbatim and skips the worker preamble (reasoning agents)', () => {
+    const cmd = buildAgentCommand(
+      { program: 'claude-code', model: 'opus' },
+      { projectPath: '/repo', taskId: 'pj-1', agentName: 'Pilot', rawPrompt: 'PLAN ONLY: do not implement', env: { ORCA_PLAN_JOB: 'pj-1' } },
+    );
+    expect(cmd).toContain('--model opus');
+    expect(cmd).toContain("'PLAN ONLY: do not implement'");
+    expect(cmd).toContain('export ORCA_PLAN_JOB=');
+    expect(cmd).not.toContain('orca close'); // no close-command preamble for reasoning agents
+    expect(cmd).not.toContain('1200000 ms'); // reasoning agents bypass the worker preamble
   });
 });

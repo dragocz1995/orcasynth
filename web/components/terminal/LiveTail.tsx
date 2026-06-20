@@ -6,8 +6,8 @@ import { parseAnsi } from '../../modules/sessions/ansi';
 import { useTranslation } from '../../lib/i18n';
 
 /** Live, ANSI-coloured tail of a tmux session's pane — the single source of truth for the
- *  "what is the agent doing right now" preview. Polls only while mounted, flashes its edge on
- *  fresh output, and is optionally clickable (onExpand → open the full terminal). */
+ *  "what is the agent doing right now" preview. Polls only while mounted, and is optionally
+ *  clickable (onExpand → open the full terminal). */
 export function LiveTail({ name, lines = 20, heightClass = 'max-h-80', onExpand }: {
   name: string;
   /** How many trailing pane rows to show — bigger = more of the agent's work visible. */
@@ -20,27 +20,43 @@ export function LiveTail({ name, lines = 20, heightClass = 'max-h-80', onExpand 
   const { t } = useTranslation();
   const { tail, isLoading } = useSessionPane(name, lines);
 
-  // Flash the edge whenever fresh output streams in.
-  const [flash, setFlash] = useState(false);
-  const prev = useRef(tail);
+  // Full-screen TUIs (opencode) draw a wide, box-drawn layout that mangles if it wraps. Keep the
+  // pane unwrapped and shrink the whole thing to fit the panel width so the entire UI stays visible.
+  const boxRef = useRef<HTMLDivElement>(null);
+  const preRef = useRef<HTMLPreElement>(null);
+  const [fit, setFit] = useState({ scale: 1, h: 0 });
   useEffect(() => {
-    if (prev.current === tail) return;
-    prev.current = tail;
-    if (!tail) return;
-    setFlash(true);
-    const id = setTimeout(() => setFlash(false), 600);
-    return () => clearTimeout(id);
+    const box = boxRef.current, pre = preRef.current;
+    if (!box || !pre) return;
+    const measure = () => {
+      const cw = pre.scrollWidth, ch = pre.scrollHeight, bw = box.clientWidth;
+      if (!cw || !bw) return;
+      const scale = Math.min(1, bw / cw); // never upscale short, plain-text output
+      setFit({ scale, h: Math.ceil(ch * scale) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    return () => ro.disconnect();
   }, [tail]);
 
   const pane = (
-    <pre
-      data-flash={flash ? 'true' : undefined}
-      className={`tail-live ${heightClass} overflow-auto whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-text-muted`}
+    <div
+      ref={boxRef}
+      className={`${heightClass} overflow-auto`}
     >
-      {isLoading ? t.sessions.loading : tail
-        ? parseAnsi(tail).map((s, i) => <span key={i} style={s.color ? { color: s.color } : undefined}>{s.text}</span>)
-        : t.sessions.noOutput}
-    </pre>
+      <div className="overflow-hidden" style={{ height: fit.h || undefined }}>
+        <pre
+          ref={preRef}
+          style={{ transform: fit.scale < 1 ? `scale(${fit.scale})` : undefined, transformOrigin: 'top left' }}
+          className="w-max whitespace-pre font-mono text-xs leading-relaxed text-text-muted"
+        >
+          {isLoading ? t.sessions.loading : tail
+            ? parseAnsi(tail).map((s, i) => <span key={i} style={s.color ? { color: s.color } : undefined}>{s.text}</span>)
+            : t.sessions.noOutput}
+        </pre>
+      </div>
+    </div>
   );
 
   if (!onExpand) {

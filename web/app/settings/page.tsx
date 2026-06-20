@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, type LucideIcon } from 'lucide-react';
 import { PROVIDERS, ProviderLogo, ProviderTag } from '../../modules/settings/providers';
 import { ModelIcon } from '../../components/ui/ModelIcon';
+import { Select } from '../../components/ui/Select';
 import { ModelModal } from '../../modules/settings/ModelModal';
 import { execProvider, execModel, type ProviderId } from '../../lib/modelProvider';
 import { useConfig, useHermesStatus, useMe } from '../../lib/queries';
@@ -30,6 +31,38 @@ const inputClass = 'w-full rounded-md border border-border bg-bg px-3 py-2 text-
 
 const PRESET_EXECS = new Set(EXEC_PRESETS.map((p) => p.exec));
 
+/** Per-role reasoning backend picker: "Relay (model via API)" by default, or a CLI agent model from
+ *  the configured list. Mirrors the executor Select used elsewhere, with a live model badge. An
+ *  empty value means relay (the role falls back to the planner/overseer relay model). */
+function BackendPicker({ value, onChange, models, relayLabel, allowRelay = true }: { value: string; onChange: (v: string) => void; models: { label: string; exec: string }[]; relayLabel: string; allowRelay?: boolean }) {
+  const known = new Set(models.map((m) => m.exec));
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg" aria-hidden>
+        {value ? <ModelIcon name={value} size={16} /> : <Radio size={14} className="text-text-muted" />}
+      </span>
+      <Select value={value} onChange={(e) => onChange(e.target.value)}>
+        {allowRelay ? <option value="">{relayLabel}</option> : null}
+        {value && !known.has(value) ? <option value={value}>{value}</option> : null}
+        {models.map((m) => <option key={m.exec} value={m.exec}>{m.label}</option>)}
+      </Select>
+    </div>
+  );
+}
+
+/** Relay-mode model field: a free-text model name with a live brand badge, mirroring
+ *  BackendPicker's icon affordance so both autopilot modes look consistent. */
+function ModelInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-bg" aria-hidden>
+        <ModelIcon name={value} size={16} />
+      </span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} className={inputClass} placeholder={placeholder} />
+    </div>
+  );
+}
+
 type Category = 'models' | 'autopilot' | 'providers' | 'defaults' | 'hermes';
 
 export default function SettingsPage() {
@@ -45,6 +78,12 @@ export default function SettingsPage() {
   const [customModels, setCustomModels] = useState<{ label: string; exec: string }[]>([]);
   const [model, setModel] = useState('');
   const [overseerModel, setOverseerModel] = useState('');
+  const [pilotExec, setPilotExec] = useState('');
+  const [overseerExec, setOverseerExec] = useState('');
+  // Autopilot backend is an either/or: 'relay' (planner+overseer via API) or 'agents' (CLI agents
+  // that read the repo). Derived from whether an exec is set; the picker enforces the exclusivity.
+  const [reasoningMode, setReasoningMode] = useState<'relay' | 'agents'>('relay');
+  const [reviewOnDone, setReviewOnDone] = useState(false);
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
@@ -57,8 +96,15 @@ export default function SettingsPage() {
   const runPreview = async () => {
     setPreviewing(true);
     try {
-      const r = await orcaClient.planPreview({ goal: sampleGoal.trim(), prompt });
-      setPreview(r.phases);
+      // Planning is async: submit a dryRun job, then poll it until it resolves (the relay backend
+      // finishes inline; an agent backend takes longer, so poll up to ~2 min before giving up).
+      const { jobId } = await orcaClient.planPreview({ goal: sampleGoal.trim(), prompt });
+      for (let i = 0; i < 120; i++) {
+        const job = await orcaClient.getPlanJob(jobId);
+        if (job.status === 'done') { setPreview(job.phases); break; }
+        if (job.status === 'failed') { toast(t.settings.planFailed, 'error'); break; }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
     } catch (e) {
       if (e instanceof OrcaApiError && e.code === 'autopilot_key_missing') toast(t.settings.setApiKeyFirst, 'error');
       else toast(String(e), 'error');
@@ -97,6 +143,10 @@ export default function SettingsPage() {
       setHiddenPresets(config.data.hiddenPresets ?? []);
       setModel(config.data.autopilot.model);
       setOverseerModel(config.data.autopilot.overseerModel ?? '');
+      setPilotExec(config.data.autopilot.pilotExec ?? '');
+      setOverseerExec(config.data.autopilot.overseerExec ?? '');
+      setReviewOnDone(config.data.autopilot.reviewOnDone ?? false);
+      setReasoningMode((config.data.autopilot.pilotExec || config.data.autopilot.overseerExec) ? 'agents' : 'relay');
       setApiUrl(config.data.autopilot.apiUrl);
       setNotes(config.data.autopilot.notes);
       setPrompt(config.data.autopilot.prompt);
@@ -119,7 +169,6 @@ export default function SettingsPage() {
   // Administration surface — admins only. A non-admin who deep-links here gets a clear stop.
   if (me.data?.user && !me.data.user.is_admin) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><EmptyState title={t.settings.adminOnly} description={t.settings.adminOnlyDesc} icon={Lock} /></ModuleShell>;
 
-  const toggle = (exec: string) => setAllowed((prev) => prev.includes(exec) ? prev.filter((e) => e !== exec) : [...prev, exec]);
   const apiKeySet = config.data?.autopilot.apiKeySet;
 
   const resetForm = () => {
@@ -127,13 +176,30 @@ export default function SettingsPage() {
     setEditingExec(null);
   };
 
+  // Model changes auto-persist immediately — no separate "save models" step to forget (a two-step
+  // add-then-save was a footgun where edits silently vanished on reload). Each handler computes the
+  // next state, applies it, and PUTs it in one go. `silent` skips the toast for frequent toggles.
+  const persistModels = (next: { allowed?: string[]; customModels?: { label: string; exec: string }[]; hiddenPresets?: string[] }, silent = false) => {
+    const allowedExecs = next.allowed ?? allowed;
+    const cm = next.customModels ?? customModels;
+    const hp = next.hiddenPresets ?? hiddenPresets;
+    setAllowed(allowedExecs);
+    setCustomModels(cm);
+    setHiddenPresets(hp);
+    update.mutate(
+      { allowedExecs, customModels: cm, hiddenPresets: hp },
+      { onSuccess: () => { if (!silent) toast(t.settings.modelsSaved); }, onError: (e) => toast(String(e), 'error') },
+    );
+  };
+
+  const toggle = (exec: string) =>
+    persistModels({ allowed: allowed.includes(exec) ? allowed.filter((e) => e !== exec) : [...allowed, exec] }, true);
+
   const deleteModel = (exec: string) => {
-    if (PRESET_EXECS.has(exec)) {
-      setHiddenPresets((prev) => (prev.includes(exec) ? prev : [...prev, exec]));
-    } else {
-      setCustomModels((prev) => prev.filter((m) => m.exec !== exec));
-    }
-    setAllowed((prev) => prev.filter((e) => e !== exec));
+    const next: { allowed: string[]; customModels?: { label: string; exec: string }[]; hiddenPresets?: string[] } = { allowed: allowed.filter((e) => e !== exec) };
+    if (PRESET_EXECS.has(exec)) next.hiddenPresets = hiddenPresets.includes(exec) ? hiddenPresets : [...hiddenPresets, exec];
+    else next.customModels = customModels.filter((m) => m.exec !== exec);
+    persistModels(next);
     if (editingExec === exec) resetForm();
   };
 
@@ -143,33 +209,34 @@ export default function SettingsPage() {
   };
 
   const saveModel = (m: { label: string; exec: string }) => {
+    let nextCustom = customModels, nextAllowed = allowed, nextHidden = hiddenPresets;
     if (editingExec) {
       const original = editingExec;
       if (PRESET_EXECS.has(original)) {
         // Editing a preset hides the original and stores a custom override in its place.
-        setHiddenPresets((prev) => (prev.includes(original) ? prev : [...prev, original]));
-        setCustomModels((prev) => [...prev.filter((x) => x.exec !== m.exec), m]);
-        setAllowed((prev) => { const base = prev.filter((e) => e !== original); return base.includes(m.exec) ? base : [...base, m.exec]; });
+        nextHidden = hiddenPresets.includes(original) ? hiddenPresets : [...hiddenPresets, original];
+        nextCustom = [...customModels.filter((x) => x.exec !== m.exec), m];
+        const base = allowed.filter((e) => e !== original);
+        nextAllowed = base.includes(m.exec) ? base : [...base, m.exec];
       } else {
-        setCustomModels((prev) => prev.some((x) => x.exec === original) ? prev.map((x) => (x.exec === original ? m : x)) : [...prev, m]);
-        setAllowed((prev) => prev.map((e) => (e === original ? m.exec : e)));
+        nextCustom = customModels.some((x) => x.exec === original) ? customModels.map((x) => (x.exec === original ? m : x)) : [...customModels, m];
+        nextAllowed = allowed.map((e) => (e === original ? m.exec : e));
       }
     } else {
-      setCustomModels((prev) => [...prev, m]);
-      setAllowed((prev) => (prev.includes(m.exec) ? prev : [...prev, m.exec])); // enable new models by default
+      nextCustom = [...customModels, m];
+      nextAllowed = allowed.includes(m.exec) ? allowed : [...allowed, m.exec]; // enable new models by default
     }
+    persistModels({ allowed: nextAllowed, customModels: nextCustom, hiddenPresets: nextHidden });
     resetForm();
   };
 
-  const saveModels = () =>
-    update.mutate(
-      { allowedExecs: allowed, customModels, hiddenPresets },
-      { onSuccess: () => toast(t.settings.modelsSaved), onError: (e) => toast(String(e), 'error') },
-    );
-
+  // Persist only the active mode's fields, and explicitly clear the other backend so the two never
+  // coexist (relay clears the execs; agents leave the relay model/key untouched but unused).
   const saveAutopilot = () =>
     update.mutate(
-      { autopilot: { model, overseerModel, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } },
+      { autopilot: reasoningMode === 'agents'
+        ? { pilotExec, overseerExec, reviewOnDone, notes, prompt }
+        : { model, overseerModel, apiUrl, pilotExec: '', overseerExec: '', notes, prompt, ...(apiKey ? { apiKey } : {}) } },
       { onSuccess: () => { toast(t.settings.autopilotSaved); setApiKey(''); }, onError: (e) => toast(String(e), 'error') },
     );
 
@@ -202,15 +269,27 @@ export default function SettingsPage() {
     { id: 'hermes', icon: Radio },
   ];
 
-  const saveAction: Record<Exclude<Category, 'hermes'>, { label: string; onClick: () => void }> = {
-    models: { label: t.settings.saveModels, onClick: saveModels },
+  // 'models' auto-saves on every change, so it has no manual save button. 'hermes' has its own form.
+  const saveAction: Record<Exclude<Category, 'hermes' | 'models'>, { label: string; onClick: () => void }> = {
     autopilot: { label: t.settings.saveAutopilot, onClick: saveAutopilot },
     providers: { label: t.settings.saveProviders, onClick: saveProviders },
     defaults: { label: t.settings.saveDefaults, onClick: saveDefaults },
   };
-  const active = category === 'hermes' ? null : saveAction[category];
+  const active = category === 'hermes' || category === 'models' ? null : saveAction[category];
 
   const models = allModels(customModels, hiddenPresets);
+
+  // Switch the autopilot backend mode. Relay clears the agent execs; agents seed a default model so
+  // the mode can't silently collapse back to relay (an empty exec = relay).
+  const switchReasoning = (m: 'relay' | 'agents') => {
+    setReasoningMode(m);
+    if (m === 'relay') { setPilotExec(''); setOverseerExec(''); }
+    else {
+      const def = models[0]?.exec ?? '';
+      if (!pilotExec) setPilotExec(def);
+      if (!overseerExec) setOverseerExec(def);
+    }
+  };
   const deleteTarget = models.find((m) => m.exec === pendingDelete);
   // Providers the user has actually configured (non-empty binary) — the only ones offered when
   // adding a model, and the source for the executor picker's grouping.
@@ -318,19 +397,53 @@ export default function SettingsPage() {
         )}
 
         {category === 'autopilot' && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SettingCard title={t.settings.plannerModel} description={t.settings.plannerModelDesc} icon={Bot}>
-                <input value={model} onChange={(e) => setModel(e.target.value)} className={inputClass} placeholder={t.settings.plannerPlaceholder} />
-              </SettingCard>
-              <SettingCard title={t.settings.overseerModel} description={t.settings.overseerModelDesc} icon={Eye}>
-                <input value={overseerModel} onChange={(e) => setOverseerModel(e.target.value)} className={inputClass} placeholder={t.settings.overseerPlaceholder} />
-              </SettingCard>
-              <SettingCard title={t.settings.apiUrl} description={t.settings.apiUrlDesc} icon={Link2}>
-                <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} className={inputClass} />
-              </SettingCard>
-              <SettingCard title={t.settings.apiKey} description={apiKeySet ? t.settings.apiKeyDesc : t.settings.apiKeyNotSetDesc} icon={KeyRound}>
-                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={apiKeySet ? t.settings.apiKeySetPlaceholder : t.settings.apiKeyPlaceholder} className={inputClass} />
-              </SettingCard>
+            <div className="flex flex-col gap-4">
+              {/* One clear choice: how the planner + overseer reason. Relay (API) OR CLI agents. */}
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-text">{t.settings.backendMode}</span>
+                  <HelpTip>{t.settings.backendModeHelp}</HelpTip>
+                </div>
+                <Segmented
+                  value={reasoningMode}
+                  onChange={(v) => switchReasoning(v as 'relay' | 'agents')}
+                  options={[
+                    { value: 'relay', label: t.settings.modeRelay, icon: Radio },
+                    { value: 'agents', label: t.settings.modeAgents, icon: Bot },
+                  ]}
+                />
+                <p className="mt-2 text-xs text-text-muted">{reasoningMode === 'relay' ? t.settings.modeRelayDesc : t.settings.modeAgentsDesc}</p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {reasoningMode === 'relay' ? (
+                <>
+                  <SettingCard title={t.settings.plannerModel} description={t.settings.plannerModelDesc} icon={Bot}>
+                    <ModelInput value={model} onChange={setModel} placeholder={t.settings.plannerPlaceholder} />
+                  </SettingCard>
+                  <SettingCard title={t.settings.overseerModel} description={t.settings.overseerModelDesc} icon={Eye}>
+                    <ModelInput value={overseerModel} onChange={setOverseerModel} placeholder={t.settings.overseerPlaceholder} />
+                  </SettingCard>
+                  <SettingCard title={t.settings.apiUrl} description={t.settings.apiUrlDesc} icon={Link2}>
+                    <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} className={inputClass} />
+                  </SettingCard>
+                  <SettingCard title={t.settings.apiKey} description={apiKeySet ? t.settings.apiKeyDesc : t.settings.apiKeyNotSetDesc} icon={KeyRound}>
+                    <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={apiKeySet ? t.settings.apiKeySetPlaceholder : t.settings.apiKeyPlaceholder} className={inputClass} />
+                  </SettingCard>
+                </>
+              ) : (
+                <>
+                  <SettingCard title={t.settings.plannerModel} description={t.settings.plannerModelDesc} icon={Bot}>
+                    <BackendPicker value={pilotExec} onChange={setPilotExec} models={models} relayLabel={t.settings.relayOption} allowRelay={false} />
+                  </SettingCard>
+                  <SettingCard title={t.settings.overseerModel} description={t.settings.overseerModelDesc} icon={Eye}>
+                    <BackendPicker value={overseerExec} onChange={setOverseerExec} models={models} relayLabel={t.settings.relayOption} allowRelay={false} />
+                  </SettingCard>
+                  <SettingCard title={t.settings.reviewOnDone} description={t.settings.reviewOnDoneHint} icon={Eye}>
+                    <Toggle checked={reviewOnDone} onChange={setReviewOnDone} label={t.settings.reviewOnDone} />
+                  </SettingCard>
+                </>
+              )}
               <SettingCard title={t.settings.notes} description={t.settings.notesDesc} icon={FileText}>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
               </SettingCard>
@@ -365,6 +478,7 @@ export default function SettingsPage() {
                     </ul>
                   )}
                 </div>
+              </div>
               </div>
             </div>
         )}

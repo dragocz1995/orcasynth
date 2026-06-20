@@ -20,6 +20,11 @@ export function agentDisplayName(session: string): string {
   return session.replace(/^orca-/, '') || session;
 }
 
+/** The epic id a mission governs: `m-orca-1234` → `orca-1234` (mission ids are `m-${epicId}`). */
+export function missionEpicId(missionId: string): string {
+  return missionId.replace(/^m-/, '');
+}
+
 /** Normalize a SQLite ("2026-06-18 10:38:49", UTC) or ISO timestamp to epoch ms. */
 export function parseTs(iso?: string | null): number | null {
   if (!iso) return null;
@@ -28,9 +33,18 @@ export function parseTs(iso?: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** Compact, language-neutral elapsed time (e.g. "12s", "3m", "5h", "2d") since the task started. */
-export function taskElapsed(task: Pick<Task, 'created_at' | 'closed_at' | 'status'>, nowMs: number): string | null {
-  const start = parseTs(task.created_at);
+/** Epoch ms the task's agent actually spawned: the precise `started:<ms>` label, falling back to
+ *  `created_at`. For a mission, every child row is created up front at plan time, so `created_at`
+ *  long predates the agent's real start — only `started:<ms>` reflects when work began. */
+export function taskStartedMs(task: Pick<Task, 'labels' | 'created_at'>): number | null {
+  const label = task.labels?.find((l) => l.startsWith('started:'));
+  if (label) { const n = Number(label.slice('started:'.length)); if (Number.isFinite(n)) return n; }
+  return parseTs(task.created_at);
+}
+
+/** Compact, language-neutral elapsed time (e.g. "12s", "3m", "5h", "2d") the agent has run. */
+export function taskElapsed(task: Pick<Task, 'labels' | 'created_at' | 'closed_at' | 'status'>, nowMs: number): string | null {
+  const start = taskStartedMs(task);
   if (start == null) return null;
   // A finished task's run is frozen at its close time — otherwise the duration keeps growing
   // from 'now' and reads as if the agent were still working.

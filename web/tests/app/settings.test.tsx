@@ -11,25 +11,28 @@ let putBody: unknown = null;
 const server = setupServer(
   http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], autopilot: { model: 'mimo-v2.5', apiUrl: 'https://api.example.com/v1', apiKeySet: false, notes: '' }, providers: { 'claude-code': { bin: 'claude', args: '' }, opencode: { bin: 'opencode', args: '' }, codex: { bin: 'codex', args: '' } }, defaults: { exec: 'sonnet', autonomy: 'L1', maxSessions: 1 } })),
   http.put('*/config', async ({ request }) => { putBody = await request.json(); return HttpResponse.json({ allowedExecs: ['sonnet'], customModels: [], autopilot: { model: 'mimo-v2.5', apiUrl: 'https://api.example.com/v1', apiKeySet: false, notes: '' }, defaults: { exec: 'sonnet', autonomy: 'L1', maxSessions: 1 } }); }),
-  http.get('*/integrations/hermes/status', () => HttpResponse.json({ home: '~/.hermes', exists: true, pluginsDir: true, pluginInstalled: true, enabled: false })),
+  http.get('*/integrations/hermes/status', () => HttpResponse.json({ home: '/var/www/.hermes', exists: true, pluginsDir: true, pluginInstalled: true, enabled: false })),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
 
 describe('SettingsPage', () => {
-  it('loads config and saves a changed model allowlist', async () => {
+  it('auto-saves a changed model allowlist on toggle (no manual save button)', async () => {
+    putBody = null;
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
     await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
-    fireEvent.click(screen.getByLabelText('Claude Sonnet')); // uncheck sonnet
-    fireEvent.click(screen.getByRole('button', { name: 'Save models' }));
+    // Models auto-persist: a toggle PUTs immediately, no separate "Save models" button.
+    expect(screen.queryByRole('button', { name: 'Save models' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Claude Sonnet')); // uncheck sonnet → auto-saves
     await waitFor(() => expect((putBody as { allowedExecs: string[] }).allowedExecs).not.toContain('sonnet'));
   });
 
-  it('Save models sends customModels in the PUT body', async () => {
+  it('auto-save sends customModels in the PUT body', async () => {
+    putBody = null;
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
     await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
-    fireEvent.click(screen.getByRole('button', { name: 'Save models' }));
+    fireEvent.click(screen.getByLabelText('Claude Sonnet')); // any change triggers the PUT
     await waitFor(() => expect((putBody as { customModels: unknown }).customModels).toBeDefined());
     expect(Array.isArray((putBody as { customModels: unknown[] }).customModels)).toBe(true);
   });
@@ -51,12 +54,13 @@ describe('SettingsPage', () => {
     fireEvent.change(screen.getByPlaceholderText('My Model'), { target: { value: 'My Custom Model' } });
     fireEvent.click(screen.getByRole('button', { name: 'Other' }));
     fireEvent.change(screen.getByPlaceholderText('provider/model-name'), { target: { value: 'my/custom' } });
+    putBody = null;
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     // The new model card should now be in the DOM (Toggle is labelled by the model label).
     await waitFor(() => expect(screen.getByLabelText('My Custom Model')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save models' }));
+    // Adding the model auto-persists — no separate "Save models" click needed.
     await waitFor(() => {
       const body = putBody as { customModels: { label: string; exec: string }[] };
       expect(body.customModels).toContainEqual({ label: 'My Custom Model', exec: 'my/custom' });
@@ -77,6 +81,41 @@ describe('SettingsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Defaults' }));
     expect(screen.getByRole('button', { name: 'Save defaults' })).toBeTruthy();
+  });
+
+  it('defaults to Relay mode and saves relay fields (execs cleared)', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
+    await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+    expect(screen.getByText('How autopilot reasons')).toBeTruthy();
+    expect(screen.getByText('Planner model')).toBeTruthy(); // same role labels in both modes
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save autopilot' }));
+    await waitFor(() => {
+      const ap = (putBody as { autopilot: { pilotExec: string; overseerExec: string } }).autopilot;
+      expect(ap.pilotExec).toBe(''); // relay mode clears the agent execs
+      expect(ap.overseerExec).toBe('');
+    });
+  });
+
+  it('switching to CLI Tools saves agent execs (same role labels in both modes)', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
+    await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+    fireEvent.click(screen.getByText('CLI Tools')); // mode toggle
+    expect(screen.getByText('Planner model')).toBeTruthy(); // unified label, not a separate "Pilot backend"
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save autopilot' }));
+    await waitFor(() => {
+      const ap = (putBody as { autopilot: { pilotExec: string; overseerExec: string; reviewOnDone: boolean } }).autopilot;
+      expect(ap.pilotExec).not.toBe(''); // seeded with a default model on switch
+      expect(ap.overseerExec).not.toBe('');
+      expect(ap.reviewOnDone).toBe(false);
+    });
   });
 
   it('shows the Hermes panel with status badges and no header save button', async () => {
