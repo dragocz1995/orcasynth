@@ -24,7 +24,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: { mobileOpen?: bo
   const { data } = useHealth();
   const tasks = useTasks();
   const me = useMe();
-  const isAdmin = me.data?.user.is_admin ?? false;
+  const isAdmin = me.data?.user?.is_admin ?? false;
   const up = data?.ok === true;
   // ready = up & idle · busy = up & a task is actually in progress · fail = unreachable
   const working = (tasks.data ?? []).some((t) => t.status === 'in_progress');

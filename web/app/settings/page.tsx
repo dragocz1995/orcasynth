@@ -79,7 +79,7 @@ export default function SettingsPage() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   // Hermes integration form state
-  const [hHome, setHHome] = useState('~/.hermes');
+  const [hHome, setHHome] = useState('/var/www/.hermes');
   const [hUrl, setHUrl] = useState('');
   const [hToken, setHToken] = useState('');
   const hermesStatus = useHermesStatus(hHome);
@@ -117,7 +117,7 @@ export default function SettingsPage() {
   if (config.isLoading) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><LoadingState /></ModuleShell>;
   if (config.isError) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><ErrorState message={t.common.daemonUnreachable} onRetry={() => config.refetch()} /></ModuleShell>;
   // Administration surface — admins only. A non-admin who deep-links here gets a clear stop.
-  if (me.data && !me.data.user.is_admin) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><EmptyState title={t.settings.adminOnly} description={t.settings.adminOnlyDesc} icon={Lock} /></ModuleShell>;
+  if (me.data?.user && !me.data.user.is_admin) return <ModuleShell moduleId="settings"><ModuleHeader title={t.page.settings} icon={SlidersHorizontal} /><EmptyState title={t.settings.adminOnly} description={t.settings.adminOnlyDesc} icon={Lock} /></ModuleShell>;
 
   const toggle = (exec: string) => setAllowed((prev) => prev.includes(exec) ? prev.filter((e) => e !== exec) : [...prev, exec]);
   const apiKeySet = config.data?.autopilot.apiKeySet;
