@@ -34,6 +34,31 @@ completion. It ships a REST API, a CLI, and a real-time web UI.
 - **Self-hosted & lightweight.** A single SQLite-backed daemon (Hono) + a Next.js front end.
   No external services required beyond your LLM provider.
 
+## Screenshots
+
+<div align="center">
+
+**Dashboard** — live agents, active missions, autopilot spotlight, and recent outcomes at a glance.
+
+![Dashboard](docs/images/dashboard.png)
+
+</div>
+
+| | |
+|---|---|
+| **Tasks** — list + detail with live agent output and token usage. ![Tasks](docs/images/tasks.png) | **Kanban** — open / in-progress / blocked / closed, with mission progress. ![Kanban](docs/images/kanban.png) |
+| **Missions** — phase graph and task flow for an autopilot run. ![Missions](docs/images/missions.png) | **Timeline** — a live activity feed across tasks, missions, and signals. ![Timeline](docs/images/timeline.png) |
+| **Sessions** — real-time `tmux` agent previews with one-click intervention. ![Sessions](docs/images/sessions.png) | **Terminal** — the full agent TUI, including human-in-the-loop approvals. ![Terminal](docs/images/terminal.png) |
+| **Projects** — a built-in Monaco editor with the project file tree. ![Projects editor](docs/images/projects-editor.png) | **Settings** — model presets, providers, autopilot, and defaults. ![Settings](docs/images/settings.png) |
+
+<div align="center">
+
+**Onboarding** — a first-run setup flow that needs no login until the first admin is created.
+
+![Onboarding](docs/images/onboarding.png)
+
+</div>
+
 ## Quick start
 
 Requires **Node ≥ 22** and **tmux**.
