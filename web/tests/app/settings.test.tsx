@@ -79,6 +79,25 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Save defaults' })).toBeTruthy();
   });
 
+  it('renders per-role Pilot/Overseer backend fields and sends them on save', async () => {
+    const { wrapper: Wrapper } = createWrapper();
+    render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
+    await waitFor(() => expect(screen.getByLabelText('Claude Sonnet')).toBeChecked());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
+    expect(screen.getByText('Pilot backend')).toBeTruthy();
+    expect(screen.getByText('Overseer backend')).toBeTruthy();
+    expect(screen.getByText('Review on phase completion')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save autopilot' }));
+    await waitFor(() => {
+      const ap = (putBody as { autopilot: { pilotExec: string; overseerExec: string; reviewOnDone: boolean } }).autopilot;
+      expect(ap.pilotExec).toBe('');
+      expect(ap.overseerExec).toBe('');
+      expect(ap.reviewOnDone).toBe(false);
+    });
+  });
+
   it('shows the Hermes panel with status badges and no header save button', async () => {
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);

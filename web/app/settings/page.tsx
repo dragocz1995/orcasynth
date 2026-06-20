@@ -45,6 +45,9 @@ export default function SettingsPage() {
   const [customModels, setCustomModels] = useState<{ label: string; exec: string }[]>([]);
   const [model, setModel] = useState('');
   const [overseerModel, setOverseerModel] = useState('');
+  const [pilotExec, setPilotExec] = useState('');
+  const [overseerExec, setOverseerExec] = useState('');
+  const [reviewOnDone, setReviewOnDone] = useState(false);
   const [apiUrl, setApiUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [notes, setNotes] = useState('');
@@ -97,6 +100,9 @@ export default function SettingsPage() {
       setHiddenPresets(config.data.hiddenPresets ?? []);
       setModel(config.data.autopilot.model);
       setOverseerModel(config.data.autopilot.overseerModel ?? '');
+      setPilotExec(config.data.autopilot.pilotExec ?? '');
+      setOverseerExec(config.data.autopilot.overseerExec ?? '');
+      setReviewOnDone(config.data.autopilot.reviewOnDone ?? false);
       setApiUrl(config.data.autopilot.apiUrl);
       setNotes(config.data.autopilot.notes);
       setPrompt(config.data.autopilot.prompt);
@@ -169,7 +175,7 @@ export default function SettingsPage() {
 
   const saveAutopilot = () =>
     update.mutate(
-      { autopilot: { model, overseerModel, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } },
+      { autopilot: { model, overseerModel, pilotExec, overseerExec, reviewOnDone, apiUrl, notes, prompt, ...(apiKey ? { apiKey } : {}) } },
       { onSuccess: () => { toast(t.settings.autopilotSaved); setApiKey(''); }, onError: (e) => toast(String(e), 'error') },
     );
 
@@ -324,6 +330,15 @@ export default function SettingsPage() {
               </SettingCard>
               <SettingCard title={t.settings.overseerModel} description={t.settings.overseerModelDesc} icon={Eye}>
                 <input value={overseerModel} onChange={(e) => setOverseerModel(e.target.value)} className={inputClass} placeholder={t.settings.overseerPlaceholder} />
+              </SettingCard>
+              <SettingCard title={t.settings.pilotBackend} description={t.settings.pilotBackendHint} icon={Bot}>
+                <input value={pilotExec} onChange={(e) => setPilotExec(e.target.value)} className={inputClass} placeholder={t.settings.relayOption} />
+              </SettingCard>
+              <SettingCard title={t.settings.overseerBackend} description={t.settings.overseerBackendHint} icon={Eye}>
+                <input value={overseerExec} onChange={(e) => setOverseerExec(e.target.value)} className={inputClass} placeholder={t.settings.relayOption} />
+              </SettingCard>
+              <SettingCard title={t.settings.reviewOnDone} description={t.settings.reviewOnDoneHint} icon={Eye}>
+                <Toggle checked={reviewOnDone} onChange={setReviewOnDone} label={t.settings.reviewOnDone} />
               </SettingCard>
               <SettingCard title={t.settings.apiUrl} description={t.settings.apiUrlDesc} icon={Link2}>
                 <input value={apiUrl} onChange={(e) => setApiUrl(e.target.value)} className={inputClass} />
