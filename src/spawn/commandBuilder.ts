@@ -49,6 +49,7 @@ export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
     `You are the orca agent "${ctx.agentName}". Work on task ${ctx.taskId}${titlePart}.${detailsPart}`,
     '',
     ...implementLines,
+    'For any shell command that may run long (dependency installs, builds, full test suites), set a generous tool timeout — at least 20 minutes (1200000 ms). The default command timeout is short and would otherwise kill it mid-run and fail your task.',
     `When you finish, close the task with a one-sentence summary of what you did and the result, plus the outcome:`,
     `  - success: ${closeCommand} --summary "<what you did + result>" --outcome ok`,
     `  - could not complete: ${closeCommand} --summary "<what blocked you>" --outcome fail`,
