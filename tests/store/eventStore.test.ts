@@ -19,6 +19,21 @@ describe('EventStore', () => {
       ['task', 't1', 'open'],
     ]); // newest first (id DESC)
   });
+  it('stamps task/review events with the task\'s project_id and leaves signal/mission null', () => {
+    db.prepare("INSERT INTO projects (id, slug, path) VALUES (7, 'proj', '/p')").run();
+    db.prepare("INSERT INTO tasks (id, project_id, title, type) VALUES ('t-p', 7, 'T', 'task')").run();
+    events.record({ type: 'task', taskId: 't-p', status: 'open' });
+    events.record({ type: 'review', missionId: 'm1', taskId: 't-p', approve: true, rationale: 'ok' });
+    events.record({ type: 'signal', session: 's1', signal: { type: 'working' } });
+    const [sig, review, task] = events.list(); // newest-first
+    expect(task!.project_id).toBe(7);
+    expect(review!.project_id).toBe(7);
+    expect(sig!.project_id ?? null).toBeNull();
+  });
+  it('records a task event for an unknown task with a null project_id (no throw)', () => {
+    events.record({ type: 'task', taskId: 'ghost', status: 'open' });
+    expect(events.list()[0]!.project_id ?? null).toBeNull();
+  });
   it('respects limit and type filter', () => {
     events.record({ type: 'task', taskId: 'a', status: 'open' });
     events.record({ type: 'task', taskId: 'b', status: 'closed' });

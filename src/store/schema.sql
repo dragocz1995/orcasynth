@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS user_projects (
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  type TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''
+  type TEXT NOT NULL, target TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '',
+  project_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_target ON events(target);

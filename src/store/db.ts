@@ -41,6 +41,11 @@ export function openDb(path: string): Db {
   // Token scope: spawned agents get a 'agent'-scoped token (worker/overseer/pilot verbs only),
   // never the admin's full token. Pre-existing rows default to 'full' (interactive user sessions).
   addColumn(db, 'auth_tokens', 'scope', "TEXT NOT NULL DEFAULT 'full'");
+  // Timeline drill-down: events carry the project they belong to (derived from the task at write
+  // time) so the UI can scope/link an event to its repo. Nullable — mission/signal events have none.
+  // The index is created here (not in schema.sql) so it runs *after* the column exists on migrated DBs.
+  addColumn(db, 'events', 'project_id', 'INTEGER');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id)');
   // Seed the bootstrap admin on existing DBs: the lowest-id user, if none is flagged yet.
   db.exec("UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users) AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)");
   return db;

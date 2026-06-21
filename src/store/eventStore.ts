@@ -1,7 +1,7 @@
 import type { Db } from './db.js';
 import type { OrcaEvent } from '../api/sse.js';
 
-export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string }
+export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string; project_id: number | null }
 
 function toRow(e: OrcaEvent): { type: string; target: string; detail: string } | null {
   switch (e.type) {
@@ -18,7 +18,13 @@ export class EventStore {
   record(e: OrcaEvent): void {
     const r = toRow(e);
     if (!r) return;
-    this.db.prepare('INSERT INTO events (type, target, detail) VALUES (?, ?, ?)').run(r.type, r.target, r.detail);
+    // Task/review events point at a task → stamp the event with that task's project so the timeline
+    // can scope/link it to the right repo. Mission/signal carry no task, so project stays null.
+    const taskId = e.type === 'task' || e.type === 'review' ? e.taskId : null;
+    const projectId = taskId
+      ? (this.db.prepare('SELECT project_id FROM tasks WHERE id = ?').get(taskId) as { project_id: number } | undefined)?.project_id ?? null
+      : null;
+    this.db.prepare('INSERT INTO events (type, target, detail, project_id) VALUES (?, ?, ?, ?)').run(r.type, r.target, r.detail, projectId);
   }
   /** Purge all events for a target (e.g. a deleted task) so the timeline shows no dead feed. */
   deleteForTarget(target: string): void {

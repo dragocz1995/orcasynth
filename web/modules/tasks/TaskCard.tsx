@@ -5,6 +5,7 @@ import type { Task } from '../../lib/types';
 import { useCloseTask, useDeleteTask } from '../../lib/mutations';
 import { useConfig, useSessionSignal } from '../../lib/queries';
 import { taskExec } from '../../lib/taskExec';
+import { execModel } from '../../lib/modelProvider';
 import { useTaskControls } from '../../lib/useTaskControls';
 import { Badge } from '../../components/ui/Badge';
 import { Checkbox } from '../../components/ui/Checkbox';
@@ -69,8 +70,13 @@ export function TaskCard({ task, onEdit, onSelect, active = false, blockers, sel
           <AgentStatusDot signal={signal} live={running} size="sm" {...stallProps} />
         </div>
         <div className="flex items-center gap-1.5">
-          <Icon size={11} className="shrink-0 text-text-muted" aria-hidden />
-          <span className="truncate font-mono text-[11px] text-text-muted">{task.id}</span>
+          {iconExec ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-elevated px-1.5 py-0.5 font-mono text-[11px] text-text-muted" title={iconExec}>
+              <ModelIcon name={iconExec} size={11} />{execModel(iconExec)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5"><Icon size={11} className="shrink-0 text-text-muted" aria-hidden /><span className="truncate font-mono text-[11px] text-text-muted">{task.id}</span></span>
+          )}
           {blocked ? <span className="shrink-0 text-[11px] text-warning" title={blockers!.map((b) => b.title).join(', ')}>· {t.tasks.dependencies} {blockers!.length}</span> : null}
         </div>
       </div>

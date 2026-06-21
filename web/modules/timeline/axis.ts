@@ -9,6 +9,8 @@ export interface AxisEvent {
   target: string;
   detail: string;
   timestamp: number;
+  /** Project the event belongs to (task/review events only) — drives the drill-down diff. */
+  projectId?: number | null;
 }
 
 /** A run of consecutive identical events collapsed into a single entry. */

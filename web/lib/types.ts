@@ -58,7 +58,7 @@ export interface User { id: number; username: string; created_at: string; is_adm
 export interface UserPatch { is_admin?: boolean; allowed_execs?: string[] }
 export interface ProfilePatch { name?: string; email?: string; default_exec?: string }
 export interface AuthResult { token: string; user: User }
-export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string }
+export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string; project_id: number | null }
 export interface Project { id: number; slug: string; path: string; notes: string }
 interface GitStatus { branch: string; ahead: number; behind: number; dirty: number; clean: boolean }
 interface GitBranch { name: string; current: boolean }
