@@ -32,8 +32,14 @@ export function EngageModal({ onClose }: { onClose: () => void }) {
   const epics = (tasks.data ?? []).filter((t) => t.type === 'epic' && !activeEpics.has(t.id));
 
   const [epicId, setEpicId] = useState('');
-  const [autonomy, setAutonomy] = useState(config.data?.defaults?.autonomy ?? 'L3');
-  const [maxSessions, setMaxSessions] = useState(config.data?.defaults?.maxSessions ?? 1);
+  // Seed the defaults lazily from config: a `useState(config…)` initializer runs once on mount, before
+  // the async config has loaded, and would freeze the fallback (L3 / 1) even when the saved default
+  // differs. Keep the user's pick as an explicit override, else fall through to config, else the
+  // constant — so the field reflects config the moment it arrives, without clobbering an edit.
+  const [autonomyPick, setAutonomy] = useState<string | null>(null);
+  const [maxSessionsPick, setMaxSessions] = useState<number | null>(null);
+  const autonomy = autonomyPick ?? config.data?.defaults?.autonomy ?? 'L3';
+  const maxSessions = maxSessionsPick ?? config.data?.defaults?.maxSessions ?? 1;
 
   const submit = () => {
     if (!epicId) return;

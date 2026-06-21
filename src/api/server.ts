@@ -140,10 +140,31 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       });
     }
 
+    // Brute-force guard for the only unauthenticated, credential-checking endpoint: a fixed window per
+    // client IP. Prefer x-real-ip (set by our nginx) over the client-spoofable x-forwarded-for. In-memory
+    // per-process is enough for the single-daemon deployment; entries self-expire and are swept when the
+    // map grows large so distinct-IP traffic can't leak memory.
+    const LOGIN_MAX = 10, LOGIN_WINDOW_MS = 5 * 60_000;
+    const loginHits = new Map<string, { count: number; resetAt: number }>();
+    const loginLimited = (ip: string, now: number): boolean => {
+      if (loginHits.size > 5000) for (const [k, v] of loginHits) if (now >= v.resetAt) loginHits.delete(k);
+      const h = loginHits.get(ip);
+      if (!h || now >= h.resetAt) { loginHits.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS }); return false; }
+      h.count++;
+      return h.count > LOGIN_MAX;
+    };
     app.post('/auth/login', async (c) => {
-      const { username, password } = await c.req.json();
-      const user = users.verify(username, password);
+      const ip = c.req.header('x-real-ip') ?? c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+      if (loginLimited(ip, d.clock.now())) return c.json({ error: 'too many login attempts, try again later' }, 429);
+      // Tolerate a missing/invalid JSON body: `c.req.json()` throws on empty input, which would surface
+      // as an unhandled 500. A malformed login is a client error → 400, not a server fault.
+      const body = await c.req.json().catch(() => null) as { username?: unknown; password?: unknown } | null;
+      if (typeof body?.username !== 'string' || typeof body?.password !== 'string') {
+        return c.json({ error: 'username and password required' }, 400);
+      }
+      const user = users.verify(body.username, body.password);
       if (!user) return c.json({ error: 'invalid credentials' }, 401);
+      loginHits.delete(ip); // a valid login clears the counter so an earlier typo streak can't lock the user out
       return c.json({ token: users.issueToken(user.id), user });
     });
     app.post('/auth/logout', (c) => { const t = c.get('token'); if (t) users.revokeToken(t); return c.json({ ok: true }); });

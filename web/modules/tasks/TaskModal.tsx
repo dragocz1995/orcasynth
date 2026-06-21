@@ -90,8 +90,14 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
 
   // Planning fields
   const [goal, setGoal] = useState('');
-  const [autonomy, setAutonomy] = useState(config?.defaults?.autonomy ?? 'L3');
-  const [maxSessions, setMaxSessions] = useState(config?.defaults?.maxSessions ?? 1);
+  // Seed lazily from config: a `useState(config…)` initializer runs once before the async config has
+  // loaded and would freeze the fallback (L3 / 1) even when the saved default differs. The user's pick
+  // overrides; otherwise fall through to config, then the constant — so the field tracks config as soon
+  // as it arrives, without clobbering an edit.
+  const [autonomyPick, setAutonomy] = useState<string | null>(null);
+  const [maxSessionsPick, setMaxSessions] = useState<number | null>(null);
+  const autonomy = autonomyPick ?? config?.defaults?.autonomy ?? 'L3';
+  const maxSessions = maxSessionsPick ?? config?.defaults?.maxSessions ?? 1;
   const [engage, setEngage] = useState(false);
   // Normalized plan outcome shared by the manual (sync) and autopilot (async job) paths.
   const [result, setResult] = useState<PlanOutcome | null>(null);

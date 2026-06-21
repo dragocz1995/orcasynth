@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-export type DecisionKind = 'task' | 'prompt' | 'review';
+export type DecisionKind = 'prompt' | 'review';
 export interface DecisionResult { approve: boolean; confidence: number; destructive: boolean; rationale: string }
 export interface PendingDecision { id: string; kind: DecisionKind; context: Record<string, unknown> }
 

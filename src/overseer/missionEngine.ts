@@ -28,6 +28,11 @@ export interface MissionEngineDeps {
 export class MissionEngine {
   constructor(private d: MissionEngineDeps) {}
 
+  /** Mission ids with a tick currently in flight. tick() is async and is driven from several places
+   *  (the 90s overseer interval, engage/resume) — without this guard two overlapping ticks for the
+   *  same mission can both read the same `running` count and dispatch past `max_sessions`. */
+  private ticking = new Set<string>();
+
   async engage(input: { epicId: string; autonomy: string; maxSessions: number }): Promise<Mission> {
     const id = `m-${input.epicId}`;
     const m = this.d.missions.create({ id, epic_id: input.epicId, autonomy: input.autonomy, max_sessions: input.maxSessions });
@@ -113,6 +118,16 @@ export class MissionEngine {
   }
 
   async tick(id: string): Promise<void> {
+    if (this.ticking.has(id)) return; // a tick is already in flight for this mission — see `ticking`
+    this.ticking.add(id);
+    try {
+      await this.tickOnce(id);
+    } finally {
+      this.ticking.delete(id);
+    }
+  }
+
+  private async tickOnce(id: string): Promise<void> {
     const m = this.d.missions.get(id); if (!m || (m.state !== 'active' && m.state !== 'stalled')) return;
     // The mission's project is wherever its epic lives — resolve it per tick.
     const epic = this.d.tasks.get(m.epic_id); if (!epic) return;
@@ -147,7 +162,17 @@ export class MissionEngine {
       if (!named) this.d.tasks.setAgent(task.id, agentName);
       this.d.tasks.markStarted(task.id, this.d.clock.now()); // precise spawn time → correct usage attribution under concurrency
       this.d.tasks.setStatus(task.id, 'in_progress');
-      await this.d.spawn.launch({ projectId: epic.project_id, projectPath: project.path, taskId: task.id, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: m.epic_id });
+      try {
+        await this.d.spawn.launch({ projectId: epic.project_id, projectPath: project.path, taskId: task.id, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: m.epic_id });
+      } catch (e) {
+        // Spawn failed (tmux down, bin missing): roll back to open so the task doesn't sit in_progress
+        // with no agent — which would otherwise burn the stuck-detector's relaunch budget before it
+        // ever really ran. Mirrors Scheduler's rollback. Skip running++ so a later tick retries it.
+        this.d.tasks.setStatus(task.id, 'open');
+        this.d.bus.publish({ type: 'task', taskId: task.id, status: 'open' });
+        log.error(`spawn failed for task ${task.id} in mission ${id} — reverted to open`, e);
+        continue;
+      }
       running++;
     }
 

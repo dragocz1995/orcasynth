@@ -1,6 +1,5 @@
 export interface DetectedPrompt {
   question: string;
-  questionType: 'choice' | 'approval';
   options: { id: string; label: string }[];
   context: string;
   /** Keys that accept/approve the prompt. The deriver sends these only when autonomy permits. */
@@ -24,7 +23,6 @@ function detectOpenCodePermission(output: string): DetectedPrompt | null {
   if (!(hasTitle && hasAccept && hasReject)) return null;
   return {
     question: 'OpenCode requests permission for an action.',
-    questionType: 'choice',
     options: [{ id: 'allow', label: 'Allow once' }, { id: 'reject', label: 'Reject' }],
     context: OPENCODE_PERMISSION.title,
     acceptKeys: ['Enter'], // leftmost "Allow once" is focused; one Enter approves (verified live)
@@ -39,7 +37,6 @@ function detectClaudeTrust(output: string): DetectedPrompt | null {
   if (!/Yes, I trust this folder/i.test(output)) return null;
   return {
     question: 'Claude asks to trust the workspace folder before starting.',
-    questionType: 'approval',
     options: [{ id: 'yes', label: 'Yes, I trust this folder' }, { id: 'no', label: 'No, exit' }],
     context: 'Accessing workspace (trust check)',
     acceptKeys: ['Enter'],
@@ -52,7 +49,6 @@ function detectClaudePermission(output: string): DetectedPrompt | null {
   if (!/Do you want to proceed\?/i.test(output)) return null;
   return {
     question: 'Claude requests permission to proceed.',
-    questionType: 'approval',
     options: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }],
     context: 'Do you want to proceed?',
     acceptKeys: ['Enter'], // default-highlighted option is "Yes"
@@ -64,7 +60,6 @@ function detectCodexApproval(output: string): DetectedPrompt | null {
   if (!/Allow command\?|Approve this command\?|Run command\?/i.test(output)) return null;
   return {
     question: 'Codex requests approval to run a command.',
-    questionType: 'approval',
     options: [{ id: 'yes', label: 'Yes' }, { id: 'no', label: 'No' }],
     context: 'Codex approval',
     acceptKeys: ['Enter'],

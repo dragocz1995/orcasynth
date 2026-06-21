@@ -105,9 +105,17 @@ export const orcaClient = {
   projectFileAtHead: (id: number, path: string) => req<{ content: string }>(`/projects/${id}/head?path=${encodeURIComponent(path)}`),
   projectCommit: (id: number, hash: string) => req<{ diff: string; files: string[] }>(`/projects/${id}/commit/${encodeURIComponent(hash)}`),
   projectCommitFileDiff: (id: number, hash: string, path: string) => req<{ diff: string }>(`/projects/${id}/commit/${encodeURIComponent(hash)}/diff?path=${encodeURIComponent(path)}`),
-  // Authenticated URL for raw file bytes (image previews) — usable directly as an <img> src since
-  // the daemon also accepts the token as a query param.
-  projectRawUrl: (id: number, path: string) => `${BASE}/projects/${id}/raw?path=${encodeURIComponent(path)}&token=${encodeURIComponent(getToken() ?? '')}`,
+  // Authenticated fetch of raw file bytes (image previews) as a Blob. The bearer token goes in the
+  // Authorization header — never the URL query string, which would leak it into proxy/referrer/history
+  // logs (finding W4). The caller wraps the Blob in a short-lived object URL for <img src>.
+  projectRawBlob: async (id: number, path: string): Promise<Blob> => {
+    const token = getToken();
+    const headers = new Headers();
+    if (token) headers.set('authorization', `Bearer ${token}`);
+    const res = await fetch(`${BASE}/projects/${id}/raw?path=${encodeURIComponent(path)}`, { headers });
+    if (!res.ok) throw new OrcaApiError(`orca ${res.status} on raw ${path}`, res.status);
+    return res.blob();
+  },
   newProjectFile: (id: number, path: string) => req<{ ok: boolean }>(`/projects/${id}/new-file`, json({ path })),
   newProjectDir: (id: number, path: string) => req<{ ok: boolean }>(`/projects/${id}/dir`, json({ path })),
   renameProjectEntry: (id: number, from: string, to: string) => req<{ ok: boolean }>(`/projects/${id}/rename`, json({ from, to })),

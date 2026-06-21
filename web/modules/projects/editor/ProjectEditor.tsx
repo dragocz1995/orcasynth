@@ -249,7 +249,7 @@ export function ProjectEditor({ projectId, onClose, initialCommit, initialWorkin
               : !selected ? <EmptyState title={t.projects.selectFile} icon={FileIcon} />
               : img ? <ImagePreview projectId={projectId} path={selected} />
               : fileData.data?.truncated ? <p className="p-4 text-center text-sm text-text-muted">{t.projects.fileTooBig}</p>
-              : effTab === 'diff' ? <DiffEditorPane path={selected} original={headData.data?.content ?? ''} modified={value} />
+              : effTab === 'diff' ? (headData.isLoading ? <LoadingState /> : <DiffEditorPane path={selected} original={headData.data?.content ?? ''} modified={value} />)
               : effTab === 'preview' ? <MarkdownPreview source={value} />
               : <EditorPane path={selected} value={value} onChange={onChange} onSave={save} wordWrap={wordWrap} />}
           </div>

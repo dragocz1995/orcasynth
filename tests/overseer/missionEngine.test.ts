@@ -31,6 +31,24 @@ function setup() {
 }
 
 describe('MissionEngine', () => {
+  it('reverts a task to open (and publishes it) when spawn.launch throws', async () => {
+    const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+    const tasks = new TaskStore(db);
+    tasks.create({ id: 'epic', project_id: 1, title: 'E', type: 'epic' });
+    tasks.create({ id: 't1', project_id: 1, title: 'one', parent_id: 'epic' });
+    const bus = new EventBus();
+    const events: OrcaEvent[] = []; bus.subscribe((e) => events.push(e));
+    const engine = new MissionEngine({
+      tasks, readiness: new Readiness(db), missions: new MissionStore(db),
+      spawn: { launch: vi.fn().mockRejectedValue(new Error('tmux down')) } as unknown as SpawnService,
+      tmux: new FakeTmuxDriver(), bus, projects: new ProjectStore(db),
+      fallback: { program: 'claude-code', model: 'sonnet' }, nameAgent: () => 'AgentX', clock: new SystemClock(),
+    });
+    await engine.engage({ epicId: 'epic', autonomy: 'L3', maxSessions: 1 });
+    expect(tasks.get('t1')!.status).toBe('open'); // rolled back — not left in_progress burning relaunch budget
+    expect(events.some((e) => e.type === 'task' && e.taskId === 't1' && e.status === 'open')).toBe(true);
+  });
+
   it('engages, spawns the ready head, advances on completion, auto-disengages', async () => {
     const { tasks, tmux, engine } = setup();
     const m = await engine.engage({ epicId: 'epic', autonomy: 'L3', maxSessions: 1 });

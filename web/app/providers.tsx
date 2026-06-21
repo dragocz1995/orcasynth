@@ -1,6 +1,7 @@
 'use client';
 import { useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { OrcaApiError } from '../lib/orcaClient';
 import { useOrcaEvents } from '../lib/useOrcaEvents';
 
 // EventBridge is exported so LoginGate can render it only when authenticated.
@@ -9,7 +10,20 @@ import { useOrcaEvents } from '../lib/useOrcaEvents';
 export function EventBridge() { useOrcaEvents(); return null; }
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [client] = useState(() => new QueryClient());
+  const [client] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Don't retry client errors (4xx): a 401 has already cleared the token (req() in orcaClient),
+        // and 400/403/404 won't change on a retry — retrying only delays the error UI and re-hammers
+        // the daemon. Transient faults (network drop / 5xx) still get a couple of attempts.
+        retry: (failureCount, error) => {
+          const status = error instanceof OrcaApiError ? error.status : undefined;
+          if (status != null && status >= 400 && status < 500) return false;
+          return failureCount < 2;
+        },
+      },
+    },
+  }));
   return (
     <QueryClientProvider client={client}>
       {children}

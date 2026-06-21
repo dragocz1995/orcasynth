@@ -33,6 +33,27 @@ describe('auth', () => {
     expect(bad.status).toBe(401);
   });
 
+  it('POST /auth/login returns 400 on a missing/partial body (not an unhandled 500)', async () => {
+    const { app } = makeAuthedApp();
+    // No body at all: c.req.json() throws — must surface as a client 400, not a server 500.
+    expect((await app.request('/auth/login', { method: 'POST' })).status).toBe(400);
+    // Body present but missing the password field.
+    const partial = await app.request('/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'alice' }) });
+    expect(partial.status).toBe(400);
+  });
+
+  it('rate-limits repeated login attempts from one IP (429 after the window cap)', async () => {
+    const { app } = makeAuthedApp();
+    const attempt = () => app.request('/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-real-ip': '10.0.0.9' },
+      body: JSON.stringify({ username: 'alice', password: 'nope' }),
+    });
+    let last = 0;
+    for (let i = 0; i < 11; i++) last = (await attempt()).status; // 10 allowed (401), the 11th is blocked
+    expect(last).toBe(429);
+  });
+
   it('protects routes: 401 without token, 200 with Bearer and with ?token=', async () => {
     const { app } = makeAuthedApp();
     expect((await app.request('/tasks')).status).toBe(401);

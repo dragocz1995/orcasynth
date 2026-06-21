@@ -230,7 +230,12 @@ export function buildApp(opts: BuildOpts) {
     const purgeTokens = () => users?.purgeExpiredTokens(config.get().security.tokenTtlDays);
     purgeTokens();
     const stopTokenPurge = clock.setInterval(purgeTokens, 3_600_000);
-    return () => { stopDeriver(); stopOverseer(); stopScheduler(); stopJanitor(); stopStuck(); stopOverseerWatchdog(); stopTokenPurge(); };
+    // Same for the activity timeline: every bus event is persisted (events.record), so without a
+    // retention sweep the `events` table grows without bound. Drop rows past the 30-day window hourly.
+    const purgeEvents = () => { try { events.purgeOlderThan(); } catch (e) { log.error('event purge failed', e); } };
+    purgeEvents();
+    const stopEventPurge = clock.setInterval(purgeEvents, 3_600_000);
+    return () => { stopDeriver(); stopOverseer(); stopScheduler(); stopJanitor(); stopStuck(); stopOverseerWatchdog(); stopTokenPurge(); stopEventPurge(); };
   };
   return { app, startLoops };
 }
