@@ -13,12 +13,14 @@ import { Segmented } from '../../components/ui/Segmented';
 import { IconButton } from '../../components/ui/IconButton';
 import { useToast } from '../../components/ui/Toast';
 import { useTranslation } from '../../lib/i18n';
-import { taskTypeLabel, TASK_TYPES } from '../tasks/taskMeta';
+import { taskTypeLabel, TASK_TYPES } from './taskMeta';
 import { OrcaApiError } from '../../lib/orcaClient';
 
 type Mode = 'manual' | 'replan';
 interface ManualPhase { title: string; type: string }
 
+/** Append phases to an existing autopilot epic: a manual list or an LLM replan of a residual goal.
+ *  Opened from the epic's action menu in the task list (the mission has no separate page). */
 export function AddPhaseModal({ epicId, onClose }: { epicId: string; onClose: () => void }) {
   const { data: config } = useConfig();
   const insert = useInsertPhases();
@@ -32,7 +34,6 @@ export function AddPhaseModal({ epicId, onClose }: { epicId: string; onClose: ()
   const [exec, setExec] = useState('');
   const [goal, setGoal] = useState('');
   const [rows, setRows] = useState<ManualPhase[]>([{ title: '', type: 'task' }]);
-
 
   const busy = insert.isPending;
 

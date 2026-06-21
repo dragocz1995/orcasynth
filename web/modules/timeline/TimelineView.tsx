@@ -294,7 +294,7 @@ export function TimelineView() {
     const task = taskForTarget(g.target);
     if (task) return `/tasks?select=${encodeURIComponent(task.id)}`;
     if (g.target.startsWith('orca-')) return '/sessions';
-    if (g.events[0]?.type === 'mission') return '/missions';
+    if (g.events[0]?.type === 'mission') return '/tasks';
     return undefined;
   };
   // Result summary for a closed task target, shown when its feed group is expanded.

@@ -105,7 +105,7 @@ export function DashboardView() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Link href="/tasks?new=1" className="inline-flex h-9 items-center gap-1.5 rounded-md border border-accent bg-accent px-3.5 text-sm font-medium text-white transition-opacity hover:opacity-90"><Plus size={14} aria-hidden />{t.tasks.newTask}</Link>
-          <Link href="/missions?new=1" className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-elevated px-3.5 text-sm font-medium text-text transition-colors hover:border-border-strong"><Rocket size={14} aria-hidden />{t.missions.newMission}</Link>
+          <Link href="/tasks?new=1" className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-elevated px-3.5 text-sm font-medium text-text transition-colors hover:border-border-strong"><Rocket size={14} aria-hidden />{t.missions.newMission}</Link>
         </div>
       </section>
 
@@ -140,7 +140,7 @@ export function DashboardView() {
         <section className="flex flex-col rounded-lg border border-border bg-surface" style={{ boxShadow: 'var(--shadow-card)' }}>
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2"><Rocket size={15} className="text-text-muted" aria-hidden /><h2 className="text-sm font-medium text-text">{t.page.missions}</h2></div>
-            <Link href="/missions" className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-opacity hover:opacity-80">{t.dashboard.viewAll}<ArrowRight size={12} aria-hidden /></Link>
+            <Link href="/tasks" className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-opacity hover:opacity-80">{t.dashboard.viewAll}<ArrowRight size={12} aria-hidden /></Link>
           </div>
           {missions.isLoading ? <div className="p-4"><LoadingState /></div>
             : missions.isError ? <div className="p-4"><ErrorState message={t.common.daemonUnreachable} onRetry={() => missions.refetch()} /></div>
@@ -154,7 +154,7 @@ export function DashboardView() {
                   const liveKids = kids.filter((x) => x.status === 'in_progress');
                   const needs = liveKids.filter((x) => { const s = taskSessionName(x); return s ? signals[s]?.type === 'needs_input' : false; }).length;
                   return (
-                    <Link key={m.id} href="/missions" className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-elevated">
+                    <Link key={m.id} href="/tasks" className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-elevated">
                       <span className="min-w-0 flex-1 truncate text-sm text-text">{epic?.title ?? m.epic_id}</span>
                       {needs > 0 ? <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-warning" title={t.agent.needsInput}><span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />{needs}</span> : null}
                       {liveKids.length > 0 ? <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-success" title={t.agent.working}><span className="live-dot h-1.5 w-1.5 rounded-full bg-success" style={{ ['--live-ring' as string]: 'color-mix(in srgb, var(--color-success) 50%, transparent)' }} aria-hidden />{liveKids.length}</span> : null}
@@ -239,7 +239,7 @@ function MissionSpotlightRow({ mission, epic, kids, sessionNames, signals, onPau
   return (
     <div className="flex flex-col gap-2 px-4 py-3 transition-colors hover:bg-elevated">
       <div className="flex items-center gap-2">
-        <Link href="/missions" className="flex min-w-0 flex-1 items-center gap-2">
+        <Link href="/tasks" className="flex min-w-0 flex-1 items-center gap-2">
           <span className="min-w-0 flex-1 truncate text-sm font-semibold text-text">{epic?.title ?? mission.epic_id}</span>
         </Link>
         {!disengaged && !paused ? <CapacityMeter running={cap.running} max={cap.max} /> : null}
@@ -285,7 +285,7 @@ function AutopilotSpotlight({ missions, tasks, sessionNames, signals, onPause, o
     <section className="flex flex-col rounded-lg border border-border border-t-2 border-t-accent/40 bg-surface" style={{ boxShadow: 'var(--shadow-card)' }}>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2"><Rocket size={15} className="text-text-muted" aria-hidden /><h2 className="text-sm font-medium text-text">{t.dashboard.autopilotSpotlight}</h2></div>
-        <Link href="/missions" className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-opacity hover:opacity-80">{t.dashboard.viewAll}<ArrowRight size={12} aria-hidden /></Link>
+        <Link href="/tasks" className="inline-flex items-center gap-1 text-xs font-medium text-accent transition-opacity hover:opacity-80">{t.dashboard.viewAll}<ArrowRight size={12} aria-hidden /></Link>
       </div>
       <p className="flex items-center gap-1.5 px-4 py-2 text-[11px] text-text-muted"><Sparkles size={12} className="shrink-0 text-text-muted" aria-hidden />{t.dashboard.autopilotSpotlightDesc}</p>
       {isLoading ? <div className="p-4"><LoadingState /></div>

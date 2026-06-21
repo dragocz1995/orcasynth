@@ -39,7 +39,7 @@ export function CommandPalette() {
     const nav = MODULES.map((m) => ({ id: `nav:${m.route}`, label: `${t.common.goTo} ${t.page[m.id as keyof typeof t.page] ?? m.label}`, hint: m.route, icon: m.icon, run: go(m.route) }));
     const actions: Command[] = [
       { id: 'new-task', label: t.tasks.newTask, hint: 'create', icon: Plus, run: go('/tasks?new=1') },
-      { id: 'new-mission', label: t.missions.newMission, hint: 'engage', icon: Rocket, run: go('/missions?new=1') },
+      { id: 'new-mission', label: t.missions.newMission, hint: 'engage', icon: Rocket, run: go('/tasks?new=1') },
     ];
     return [...actions, ...nav];
   }, [router, t]);

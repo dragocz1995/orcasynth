@@ -16,6 +16,10 @@ const phases: Task[] = [
 const server = setupServer(
   http.get('http://localhost:4400/sessions', () => HttpResponse.json([])),
   http.get('http://localhost:4400/projects', () => HttpResponse.json([{ id: 1, slug: 'orca', path: '/var/www/orca', notes: '' }])),
+  // EpicGroup now drives the mission lifecycle + rolled-up cost, so it reads these too.
+  http.get('http://localhost:4400/missions', () => HttpResponse.json([])),
+  http.get('http://localhost:4400/config', () => HttpResponse.json({})),
+  http.get('http://localhost:4400/tasks/:id/usage', () => HttpResponse.json({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, costUsd: null })),
 );
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -53,8 +57,8 @@ describe('EpicGroup — delete mission', () => {
 
     renderEpic();
 
-    // Open the danger action menu, then pick "Delete mission" → opens the confirm dialog.
-    fireEvent.click(screen.getByRole('button', { name: /delete mission/i }));
+    // Open the epic action menu, then pick "Delete mission" → opens the confirm dialog.
+    fireEvent.click(screen.getByRole('button', { name: /mission actions/i }));
     fireEvent.click(screen.getByRole('menuitem', { name: /delete mission/i }));
 
     // Confirm copy makes the irreversible, files-untouched scope explicit.
@@ -75,7 +79,7 @@ describe('EpicGroup — delete mission', () => {
     );
 
     renderEpic();
-    fireEvent.click(screen.getByRole('button', { name: /delete mission/i }));
+    fireEvent.click(screen.getByRole('button', { name: /mission actions/i }));
     fireEvent.click(screen.getByRole('menuitem', { name: /delete mission/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
 
