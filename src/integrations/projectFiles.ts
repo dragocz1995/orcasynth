@@ -243,7 +243,7 @@ export async function projectCommitFiles(root: string, hash: string): Promise<st
   }
 }
 
-export interface CommitFileChange { path: string; added: number; deleted: number }
+interface CommitFileChange { path: string; added: number; deleted: number }
 export interface CommitLogEntry { hash: string; subject: string; author: string; timestamp: number; files: CommitFileChange[] }
 
 /** Recent commit history with per-file line churn, for the timeline's "changes over time" view.
