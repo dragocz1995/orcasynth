@@ -70,5 +70,9 @@ describe('proxy helpers', () => {
     expect(h.get('x-forwarded-host')).toBeNull();
     // Legitimate content-negotiation headers still pass through.
     expect(h.get('accept')).toBe('application/json');
+    // accept-encoding is not forwarded: daemon<->proxy runs over localhost so compression buys
+    // nothing, and keeping it out avoids any gzip/SSE streaming edge case.
+    const enc = forwardHeaders(new Request('https://web.example/api/x', { headers: { 'accept-encoding': 'gzip, br' } }));
+    expect(enc.get('accept-encoding')).toBeNull();
   });
 });

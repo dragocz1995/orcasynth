@@ -40,7 +40,7 @@ export function isSameOrigin(req: Request): boolean {
  *  client can never smuggle its own `authorization` (the proxy injects the real bearer), spoof its
  *  source IP via `x-forwarded-for`/`x-real-ip`/`forwarded` (defeating daemon rate-limiting/audit),
  *  or inject hop-by-hop headers. Only content-negotiation headers pass through. */
-const FORWARD_ALLOW = new Set(['content-type', 'accept', 'accept-encoding', 'accept-language']);
+const FORWARD_ALLOW = new Set(['content-type', 'accept', 'accept-language']);
 
 export function forwardHeaders(req: Request): Headers {
   const h = new Headers();
