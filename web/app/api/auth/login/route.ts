@@ -10,11 +10,13 @@ export async function POST(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403, headers: { 'content-type': 'application/json' } });
   }
   const body = await req.text();
-  const upstream = await fetch(`${daemonUrl()}/auth/login`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body,
-  });
+  // Forward the trusted client IP so the daemon's login rate-limit keys per-source instead of
+  // bucketing every login as 'unknown'. The reverse proxy sets x-real-ip on the inbound request
+  // (overwriting any client-supplied value), and the daemon is localhost-only, so this can't be forged.
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) headers['x-real-ip'] = realIp;
+  const upstream = await fetch(`${daemonUrl()}/auth/login`, { method: 'POST', headers, body });
   if (!upstream.ok) {
     // Pass the daemon's status/body through (e.g. 401 bad credentials) without minting a cookie.
     return new Response(await upstream.text(), { status: upstream.status, headers: { 'content-type': 'application/json' } });

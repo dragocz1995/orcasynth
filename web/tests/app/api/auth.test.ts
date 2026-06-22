@@ -40,6 +40,18 @@ describe('auth login route', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('forwards the trusted x-real-ip to the daemon so its login rate-limit keys per-source', async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ token: 't' }), { status: 200, headers: { 'content-type': 'application/json' } }));
+    const req = new Request('https://web.test/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: 'https://web.test', 'x-real-ip': '203.0.113.7' },
+      body: JSON.stringify({ username: 'admin', password: 'x' }),
+    });
+    await login(req);
+    const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
+    expect(init.headers['x-real-ip']).toBe('203.0.113.7');
+  });
+
   it('returns 502 (not a crash) when the daemon returns a non-JSON 200', async () => {
     fetchMock.mockResolvedValue(new Response('<html>gateway</html>', { status: 200 }));
     const res = await login(post('https://web.test/api/auth/login', { username: 'admin', password: 'x' }));
