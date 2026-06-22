@@ -243,6 +243,41 @@ export async function projectCommitFiles(root: string, hash: string): Promise<st
   }
 }
 
+export interface CommitFileChange { path: string; added: number; deleted: number }
+export interface CommitLogEntry { hash: string; subject: string; author: string; timestamp: number; files: CommitFileChange[] }
+
+/** Recent commit history with per-file line churn, for the timeline's "changes over time" view.
+ *  One `git log --numstat` call yields each commit's hash, committer timestamp (ms), author, subject
+ *  and the list of changed files with +added / −deleted counts (binary files report 0/0). `limit` is
+ *  clamped to a sane range so a bogus value can never be trusted or turned into a huge scan. Newest
+ *  first; empty list outside a repo or on any error. */
+export async function projectCommitLog(root: string, limit: number): Promise<CommitLogEntry[]> {
+  const n = Number.isFinite(limit) && limit > 0 ? Math.min(Math.floor(limit), 100) : 30;
+  try {
+    const { stdout } = await run(
+      'git',
+      ['-C', realpathSync(resolve(root)), 'log', '-n', String(n), '--numstat', '--pretty=format:\x01%h\x09%ct\x09%an\x09%s'],
+      { maxBuffer: 8 * 1024 * 1024 },
+    );
+    const commits: CommitLogEntry[] = [];
+    let cur: CommitLogEntry | null = null;
+    for (const line of stdout.split('\n')) {
+      if (line.startsWith('\x01')) {
+        const [hash = '', ct = '', author = '', ...rest] = line.slice(1).split('\t');
+        cur = { hash, subject: rest.join('\t'), author, timestamp: Number(ct) * 1000, files: [] };
+        commits.push(cur);
+      } else if (cur && line.trim()) {
+        const [added = '', deleted = '', ...pathParts] = line.split('\t');
+        const path = pathParts.join('\t').trim();
+        if (path) cur.files.push({ path, added: added === '-' ? 0 : Number(added) || 0, deleted: deleted === '-' ? 0 : Number(deleted) || 0 });
+      }
+    }
+    return commits;
+  } catch {
+    return [];
+  }
+}
+
 /** Unified diff of a single file as introduced by a commit (`git show <hash> -- <path>`). The hash is
  *  validated as a hex object id; the path is validated to stay inside the project and handed to git
  *  as a clean repo-relative pathspec after `--`. Empty string on any error. */

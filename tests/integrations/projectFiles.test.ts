@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, symlinkSyn
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
-import { listProjectFiles, readProjectFile, writeProjectFile, readProjectBytes, createProjectFile, createProjectDir, deleteProjectEntry, renameProjectEntry, copyProjectEntry, projectCommitDiff, projectCommitFiles, projectCommitFileDiff } from '../../src/integrations/projectFiles.js';
+import { listProjectFiles, readProjectFile, writeProjectFile, readProjectBytes, createProjectFile, createProjectDir, deleteProjectEntry, renameProjectEntry, copyProjectEntry, projectCommitDiff, projectCommitFiles, projectCommitFileDiff, projectCommitLog } from '../../src/integrations/projectFiles.js';
 
 let root: string;
 const w = (rel: string, body: string) => { const p = join(root, rel); mkdirSync(join(p, '..'), { recursive: true }); writeFileSync(p, body); };
@@ -127,6 +127,48 @@ describe('projectCommitFiles / projectCommitFileDiff', () => {
     expect(diff).toContain('-export const x = 1;');
     expect(diff).toContain('+export const x = 2;');
     expect(await projectCommitFileDiff(root, hash, 'README.md')).toBe(''); // untouched by this commit
+  });
+});
+
+describe('projectCommitLog', () => {
+  it('returns an empty list outside a git repo', async () => {
+    expect(await projectCommitLog(root, 10)).toEqual([]);
+  });
+
+  it('returns commits newest-first with timestamps and per-file +/- line counts', async () => {
+    const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
+    git('init', '-q');
+    git('config', 'user.email', 't@t.io');
+    git('config', 'user.name', 'T');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'init');
+    w('src/index.ts', 'export const x = 2;\nexport const y = 3;'); // 1 line changed, 1 added
+    git('add', '-A');
+    git('commit', '-q', '-m', 'change index');
+
+    const log = await projectCommitLog(root, 10);
+    expect(log.length).toBe(2);
+    // newest first
+    expect(log[0].subject).toBe('change index');
+    expect(log[0].author).toBe('T');
+    expect(typeof log[0].timestamp).toBe('number');
+    expect(log[0].timestamp).toBeGreaterThan(0);
+    expect(log[0].hash).toMatch(/^[0-9a-f]{7,}$/);
+    const f = log[0].files.find((x) => x.path === join('src', 'index.ts'));
+    expect(f).toBeTruthy();
+    expect(f!.added).toBe(2);
+    expect(f!.deleted).toBe(1);
+  });
+
+  it('honors the limit and clamps a bogus limit instead of trusting it', async () => {
+    const git = (...args: string[]) => execFileSync('git', ['-C', root, ...args], { stdio: 'pipe' });
+    git('init', '-q');
+    git('config', 'user.email', 't@t.io');
+    git('config', 'user.name', 'T');
+    for (let i = 0; i < 4; i++) { w('f.txt', `v${i}`); git('add', '-A'); git('commit', '-q', '-m', `c${i}`); }
+    expect((await projectCommitLog(root, 2)).length).toBe(2);
+    // a non-finite / negative limit must not blow up or inject — it falls back to a safe default
+    expect((await projectCommitLog(root, -5 as number)).length).toBeGreaterThan(0);
   });
 });
 

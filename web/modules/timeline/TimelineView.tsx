@@ -2,7 +2,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Activity, Clock, Columns3, ArrowUpRight, FileDiff } from 'lucide-react';
-import { useActivity, useProjectChanged, useProjectChanges, useTasks } from '../../lib/queries';
+import { useActivity, useProjectChanged, useProjectChanges, useProjects, useProjectsCommits, useTasks } from '../../lib/queries';
+import { ChangesOverTime } from './ChangesOverTime';
 import { plotAxis, type AxisEvent, type AxisPoint } from './axis';
 import { eventIcon, markerTone } from './eventMeta';
 import { Segmented, type SegmentedOption } from '../../components/ui/Segmented';
@@ -193,20 +194,20 @@ function EventDetail({ point, display, onClose }: { point: AxisPoint; display: D
   return (
     <Modal title={display.label} description={`${point.detail} · ${clock(point.timestamp)}`} icon={Icon} size="lg" onClose={onClose}>
       <div className="flex h-full flex-col gap-4 overflow-hidden p-5">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <span className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 ${TONE_BUBBLE[tone]}`}>
             <Icon size={30} aria-hidden />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge tone={tone}>{point.detail}</Badge>
               {point.count > 1 ? <span className="text-xs text-text-muted">×{point.count}</span> : null}
               <ProjectPill projectId={projectId ?? undefined} />
             </div>
-            <div className="mt-1 truncate text-sm font-medium text-text">{display.label}</div>
+            <div className="mt-1 text-sm font-medium text-text">{display.label}</div>
           </div>
           {taskId ? (
-            <Link href={`/tasks?select=${encodeURIComponent(taskId)}`} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border bg-elevated px-2.5 py-1.5 text-xs text-text transition-colors hover:text-accent">
+            <Link href={`/tasks?select=${encodeURIComponent(taskId)}`} className="inline-flex w-full shrink-0 items-center justify-center gap-1 rounded-md border border-border bg-elevated px-2.5 py-1.5 text-xs text-text transition-colors hover:text-accent sm:w-auto sm:justify-start">
               <ArrowUpRight size={14} aria-hidden />{t.timeline.openTask}
             </Link>
           ) : null}
@@ -315,6 +316,12 @@ export function TimelineView() {
 
   const hasData = !q.isLoading && !q.isError && rawEvents.length > 0;
 
+  // Merge every accessible project's commit history into one "changes over time" stream below the
+  // axis (activity events don't carry a project id, so we scan the projects the user can see).
+  const projects = useProjects();
+  const projectIds = useMemo(() => (projects.data ?? []).map((p) => p.id), [projects.data]);
+  const commitsQ = useProjectsCommits(projectIds, windowHours);
+
   const STAT_CARDS: { tone: Tone; count: number; label: string }[] = [
     { tone: 'accent', count: stats.task, label: t.timeline.filterTasks },
     { tone: 'accent', count: stats.mission, label: t.timeline.filterMissions },
@@ -362,6 +369,16 @@ export function TimelineView() {
           <TimelineTrack points={points} ticks={ticks} resolve={resolve} onPick={setPicked} />
         )}
       </section>
+
+      {/* Changes over time: the commit stream + most-touched files for the same window */}
+      {hasData ? (
+        <ChangesOverTime
+          commits={commitsQ.commits}
+          windowStart={Date.now() - windowHours * 3_600_000}
+          now={Date.now()}
+          multiProject={projectIds.length > 1}
+        />
+      ) : null}
 
       {picked ? <EventDetail point={picked} display={resolve(picked)} onClose={() => setPicked(null)} /> : null}
     </div>

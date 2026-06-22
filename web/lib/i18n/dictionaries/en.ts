@@ -348,6 +348,9 @@ export const en = {
     noChanges: 'No working-tree changes',
     openTask: 'Open task',
     markerHint: 'Click an event for details and repo changes',
+    changesOverTime: 'Changes over time',
+    mostActiveFiles: 'Most active files',
+    noChangesInWindow: 'No commits in this window',
   },
   review: {
     escalated: 'Overseer rejected a phase: {reason}',

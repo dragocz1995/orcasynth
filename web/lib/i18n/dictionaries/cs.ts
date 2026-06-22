@@ -348,6 +348,9 @@ export const cs = {
     noChanges: 'Žádné změny v pracovním stromu',
     openTask: 'Otevřít úkol',
     markerHint: 'Klikněte na událost pro detail a změny v repu',
+    changesOverTime: 'Změny v čase',
+    mostActiveFiles: 'Nejaktivnější soubory',
+    noChangesInWindow: 'V tomto okně žádné commity',
   },
   review: {
     escalated: 'Dozorčí zamítl fázi: {reason}',

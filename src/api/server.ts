@@ -5,7 +5,7 @@ import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { hermesStatus, installHermesPlugin } from '../integrations/hermesInstall.js';
 import { detectClis } from '../integrations/cliDetection.js';
 import { readTaskUsage } from '../integrations/usage/index.js';
-import { listProjectFiles, readProjectFile, writeProjectFile, readProjectBytes, createProjectFile, createProjectDir, deleteProjectEntry, renameProjectEntry, copyProjectEntry, projectFileAtHead, projectFileDiff, projectCommitDiff, projectCommitFiles, projectCommitFileDiff, projectChangedFiles, projectWorkingDiff, projectReviewDiff } from '../integrations/projectFiles.js';
+import { listProjectFiles, readProjectFile, writeProjectFile, readProjectBytes, createProjectFile, createProjectDir, deleteProjectEntry, renameProjectEntry, copyProjectEntry, projectFileAtHead, projectFileDiff, projectCommitDiff, projectCommitFiles, projectCommitFileDiff, projectCommitLog, projectChangedFiles, projectWorkingDiff, projectReviewDiff } from '../integrations/projectFiles.js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { streamSSE } from 'hono/streaming';
@@ -669,6 +669,13 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const path = c.req.query('path'); if (!path) return c.json({ error: 'path required' }, 400);
     try { return c.json({ diff: await projectCommitFileDiff(p.path, c.req.param('hash'), path) }); }
     catch { return c.json({ error: 'invalid path' }, 400); }
+  });
+  app.get('/projects/:id/commits', async (c) => {
+    if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);
+    const p = projectOf(c); if (!p) return c.json({ error: 'project not found' }, 404);
+    if (!canAccessProject(c, p.id)) return c.json({ error: 'forbidden' }, 403);
+    const limit = Number(c.req.query('limit')) || 30;
+    return c.json({ commits: await projectCommitLog(p.path, limit) });
   });
   app.get('/projects/:id/changed', async (c) => {
     if (!d.projects) return c.json({ error: 'projects unavailable' }, 400);

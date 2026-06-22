@@ -66,6 +66,8 @@ interface GitStatus { branch: string; ahead: number; behind: number; dirty: numb
 interface GitBranch { name: string; current: boolean }
 interface GitCommit { hash: string; subject: string; author: string; relative: string }
 export interface ProjectGit { isRepo: boolean; status: GitStatus | null; branches: GitBranch[]; commits: GitCommit[] }
+export interface CommitFileChange { path: string; added: number; deleted: number }
+export interface CommitLogEntry { hash: string; subject: string; author: string; timestamp: number; files: CommitFileChange[] }
 
 export interface HermesStatus {
   home: string;

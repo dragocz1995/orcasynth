@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import { orcaClient } from './orcaClient';
 import type { DerivedSignal, HermesStatus, CliDetectionResult, PlanJob } from './types';
 
@@ -116,6 +116,26 @@ export const useProjectChanged = (id: number | null) =>
 
 export const useProjectChanges = (id: number | null, enabled: boolean) =>
   useQuery({ queryKey: ['project-changes', id], queryFn: () => orcaClient.projectChanges(id as number), enabled: !!id && enabled });
+
+/** Commit history across several projects, merged into one time-sorted stream tagged with projectId,
+ *  for the timeline's "changes over time" view. Each commit older than the window is dropped so the
+ *  stream lines up with the axis above it. */
+export const useProjectsCommits = (projectIds: number[], hours: number) =>
+  useQueries({
+    queries: projectIds.map((id) => ({
+      queryKey: ['project-commits', id],
+      queryFn: () => orcaClient.projectCommits(id, 40),
+      refetchInterval: 15000,
+    })),
+    combine: (results) => {
+      const cutoff = Date.now() - hours * 3600_000;
+      const commits = results
+        .flatMap((r, i) => (r.data?.commits ?? []).map((c) => ({ ...c, projectId: projectIds[i] })))
+        .filter((c) => c.timestamp >= cutoff)
+        .sort((a, b) => b.timestamp - a.timestamp);
+      return { commits, isLoading: results.some((r) => r.isLoading) };
+    },
+  });
 
 export const useMe = () =>
   useQuery({ queryKey: ['me'], queryFn: orcaClient.me, staleTime: 5 * 60 * 1000 });
