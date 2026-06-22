@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { basename } from 'node:path';
-import { SESSION_MATCH_SKEW_MS, type TokenUsage } from './types.js';
-import { walkFiles } from './walk.js';
+import { type TokenUsage } from './types.js';
+import { pickNthSession, walkFiles } from './walk.js';
 
 /** codex stores one rollout JSONL per session under ~/.codex/sessions/<Y>/<M>/<D>/rollout-*.jsonl,
  *  carrying a cumulative `total_token_usage` object. Pick the rollout started when this spawn ran
@@ -12,18 +12,17 @@ export function codexUsage(home: string, _dir: string, sinceMs: number, nth = 0)
   if (!existsSync(root)) return null;
 
   // codex rollouts aren't dir-scoped on disk, so concurrent codex agents can only be
-  // disambiguated by start order; `nth` picks the rank-th rollout in the spawn window.
+  // disambiguated by start order; `pickNthSession` picks the rank-th rollout in the spawn window.
   const sessions: { path: string; start: number }[] = [];
   for (const f of walkFiles(root)) {
     if (!basename(f).startsWith('rollout-') || !f.endsWith('.jsonl')) continue;
     const start = rolloutStartMs(f);
-    if (start == null || start < sinceMs - SESSION_MATCH_SKEW_MS) continue;
+    if (start == null) continue;
     sessions.push({ path: f, start });
   }
-  sessions.sort((a, b) => a.start - b.start);
-  const best = sessions[nth];
+  const best = pickNthSession(sessions, sinceMs, nth);
   if (!best) return null;
-  return finalUsage(best.path);
+  return finalUsage(best);
 }
 
 /** Start time of a rollout: its first event's ISO timestamp, else the timestamp in its filename. */

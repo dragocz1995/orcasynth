@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { EMPTY_USAGE, SESSION_MATCH_SKEW_MS, type TokenUsage } from './types.js';
+import { EMPTY_USAGE, type TokenUsage } from './types.js';
+import { pickNthSession } from './walk.js';
 
 /** claude-code stores one JSONL transcript per session under
  *  ~/.claude/projects/<encoded-cwd>/<sessionUuid>.jsonl, where each assistant event carries
@@ -11,22 +12,21 @@ export function claudeUsage(home: string, dir: string, sinceMs: number, nth = 0)
   const projDir = join(home, '.claude', 'projects', dir.replace(/[/._]/g, '-'));
   if (!existsSync(projDir)) return null;
 
-  // Transcripts started at/after the spawn window, ordered by start; `nth` picks one so
-  // concurrent agents in the same project map to distinct sessions instead of colliding.
+  // Transcripts that carry a start time; `pickNthSession` keeps those in the spawn window,
+  // orders by start, and picks the nth so concurrent agents map to distinct sessions.
   const sessions: { path: string; start: number }[] = [];
   for (const name of readdirSync(projDir)) {
     if (!name.endsWith('.jsonl')) continue;
     const p = join(projDir, name);
     const start = firstEventMs(p);
-    if (start == null || start < sinceMs - SESSION_MATCH_SKEW_MS) continue;
+    if (start == null) continue;
     sessions.push({ path: p, start });
   }
-  sessions.sort((a, b) => a.start - b.start);
-  const best = sessions[nth];
+  const best = pickNthSession(sessions, sinceMs, nth);
   if (!best) return null;
 
   const u: TokenUsage = { ...EMPTY_USAGE };
-  for (const line of readFileSync(best.path, 'utf8').split('\n')) {
+  for (const line of readFileSync(best, 'utf8').split('\n')) {
     if (!line.trim()) continue;
     try {
       const ev = JSON.parse(line) as { message?: { usage?: Record<string, number> } };
