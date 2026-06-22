@@ -18,7 +18,11 @@ const { app, startLoops } = buildApp({
   allowOpen: process.env.ORCA_ALLOW_OPEN === '1',
 });
 startLoops();
-const server = serve({ fetch: app.fetch, port: Number(process.env.ORCA_PORT ?? 4400) }, info => log.info(`orca serve on :${info.port} — logs → ${LOG_DIR}`));
+// Bind to localhost by default: a daemon token can spawn agents (effectively RCE), so the daemon
+// must not be publicly reachable. Front it with the web app's BFF proxy (or a reverse proxy). Set
+// ORCA_HOST=0.0.0.0 to expose it deliberately (e.g. web app on a separate host).
+const host = process.env.ORCA_HOST ?? '127.0.0.1';
+const server = serve({ fetch: app.fetch, port: Number(process.env.ORCA_PORT ?? 4400), hostname: host }, info => log.info(`orca serve on ${host}:${info.port} — logs → ${LOG_DIR}`));
 // Without an error handler an EADDRINUSE (zombie daemon still holding the port) crashes with a bare
 // stack trace; give it a clear exit message instead.
 server.on('error', (e: NodeJS.ErrnoException) => {
