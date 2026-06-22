@@ -4,7 +4,7 @@ import { Pencil, Play, Square, Pause, Archive, Trash2, Clock, Zap } from 'lucide
 import type { Task } from '../../lib/types';
 import { useCloseTask, useDeleteTask } from '../../lib/mutations';
 import { useConfig, useSessionSignal } from '../../lib/queries';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { execModel } from '../../lib/modelProvider';
 import { useTaskControls } from '../../lib/useTaskControls';
 import { Badge } from '../../components/ui/Badge';
@@ -19,7 +19,7 @@ import { OutcomeBadge } from '../../components/ui/OutcomeBadge';
 import { useSessionStall } from '../../lib/useSessionStall';
 import { useToast } from '../../components/ui/Toast';
 import { useTranslation } from '../../lib/i18n';
-import { formatTaskTime } from '../../lib/formatTime';
+import { formatTaskTime } from '../../lib/format';
 import { taskTypeMeta, statusLabel } from './taskMeta';
 import { statusTone } from '../dashboard/statusTone';
 

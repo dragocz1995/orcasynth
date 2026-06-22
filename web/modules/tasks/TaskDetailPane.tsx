@@ -6,9 +6,9 @@ import { useTasks, useAllDeps, useSessionSignal, useActivity, useConfig } from '
 import { useCloseTask, useSetTaskStatus, useResumeMission } from '../../lib/mutations';
 import { apiErrorMessage } from '../../lib/orcaClient';
 import { useTaskControls } from '../../lib/useTaskControls';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { taskSessionName, taskAgentName } from '../../lib/agentUtils';
-import { formatTaskTime } from '../../lib/formatTime';
+import { formatTaskTime } from '../../lib/format';
 import { Badge } from '../../components/ui/Badge';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { IconButton } from '../../components/ui/IconButton';

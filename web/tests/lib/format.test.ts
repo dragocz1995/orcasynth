@@ -1,5 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { formatTaskTime, localDateTime } from '../../lib/formatTime';
+import { formatDuration, compactElapsed, formatTokens, formatCost, formatTaskTime, localDateTime } from '../../lib/format';
+
+const S = 1000, M = 60 * S, H = 60 * M, D = 24 * H;
+
+describe('formatDuration', () => {
+  it('formats with two units down the ladder', () => {
+    expect(formatDuration(8 * S)).toBe('8s');
+    expect(formatDuration(3 * M + 12 * S)).toBe('3m 12s');
+    expect(formatDuration(H + 4 * M)).toBe('1h 4m');
+  });
+  it('clamps negatives to 0s', () => {
+    expect(formatDuration(-5000)).toBe('0s');
+  });
+});
+
+describe('compactElapsed', () => {
+  it('picks the single largest unit that fits', () => {
+    expect(compactElapsed(12 * S)).toBe('12s');
+    expect(compactElapsed(3 * M)).toBe('3m');
+    expect(compactElapsed(5 * H)).toBe('5h');
+    expect(compactElapsed(2 * D)).toBe('2d');
+  });
+  it('clamps negatives to 0s', () => {
+    expect(compactElapsed(-1)).toBe('0s');
+  });
+});
+
+describe('formatTokens', () => {
+  it('shows raw counts below 1k', () => {
+    expect(formatTokens(0)).toBe('0');
+    expect(formatTokens(950)).toBe('950');
+  });
+  it('shows one decimal k below 10k, whole k below 1M', () => {
+    expect(formatTokens(1234)).toBe('1.2k');
+    expect(formatTokens(12345)).toBe('12k');
+    expect(formatTokens(999_000)).toBe('999k');
+  });
+  it('shows M above a million', () => {
+    expect(formatTokens(1_250_000)).toBe('1.3M');
+  });
+  it('guards non-finite and negative inputs', () => {
+    expect(formatTokens(NaN)).toBe('0');
+    expect(formatTokens(-5)).toBe('0');
+  });
+});
+
+describe('formatCost', () => {
+  it('renders USD with a fixed 4 decimals', () => {
+    expect(formatCost(0.1234)).toBe('$0.1234');
+    expect(formatCost(1)).toBe('$1.0000');
+    expect(formatCost(0)).toBe('$0.0000');
+  });
+});
 
 const ISO = '2026-06-18 10:00:00'; // SQLite UTC format
 const at = (iso: string) => new Date(iso).getTime();

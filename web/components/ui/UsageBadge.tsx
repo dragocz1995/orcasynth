@@ -1,7 +1,7 @@
 'use client';
 import { ArrowDownToLine, ArrowUpFromLine, DatabaseZap, Coins, type LucideIcon } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n';
-import { formatTokens, formatCost } from '../../lib/formatTokens';
+import { formatTokens, formatCost } from '../../lib/format';
 import type { TokenUsage } from '../../lib/types';
 
 /** Token usage displayed as pills: IN / CACHE / OUT with formatted counts.

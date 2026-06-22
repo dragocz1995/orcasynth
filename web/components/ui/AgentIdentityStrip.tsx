@@ -1,7 +1,7 @@
 'use client';
 import { Timer } from 'lucide-react';
 import type { Task } from '../../lib/types';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { taskAgentName, taskSessionName, taskElapsed } from '../../lib/agentUtils';
 import { useConfig } from '../../lib/queries';
 import { ModelIcon } from './ModelIcon';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { taskAgentName, taskSessionName, agentDisplayName, taskElapsed, taskStartedMs, taskBlockers, tailSnippet, liveState, needsInputSessions, lastClosedTask, taskForSession, parseTs, keysForOption } from '../../lib/agentUtils';
+import { taskAgentName, taskSessionName, agentDisplayName, taskElapsed, taskStartedMs, taskBlockers, tailSnippet, liveState, needsInputSessions, lastClosedTask, taskForSession, parseTs, keysForOption, taskExec } from '../../lib/agentUtils';
 import type { Task } from '../../lib/types';
 
 const task = (over: Partial<Task> = {}): Task => ({ id: 't1', title: 'T', status: 'open', ...over });
@@ -174,5 +174,15 @@ describe('keysForOption', () => {
   });
   it('never produces negative navigation for a bad id', () => {
     expect(keysForOption('0')).toEqual(['Enter']);
+  });
+});
+
+describe('taskExec', () => {
+  it('returns the exec label value', () => {
+    expect(taskExec(['area:ui', 'exec:codex:gpt-5.4'])).toBe('codex:gpt-5.4');
+  });
+  it('returns empty string when absent or undefined', () => {
+    expect(taskExec(['area:ui'])).toBe('');
+    expect(taskExec(undefined)).toBe('');
   });
 });

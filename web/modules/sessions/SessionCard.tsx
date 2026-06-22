@@ -4,7 +4,7 @@ import { TerminalSquare, SquareSlash, Power, SquareTerminal, Eye, Bot } from 'lu
 import { useKillSession, useSendInput } from '../../lib/mutations';
 import { useTasks, useSessionSignal, useConfig } from '../../lib/queries';
 import { taskTypeMeta } from '../tasks/taskMeta';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { taskForSession, missionEpicId, keysForOption } from '../../lib/agentUtils';
 import { execModel } from '../../lib/modelProvider';
 import type { SessionInfo } from '../../lib/types';

@@ -17,7 +17,7 @@ import { AddPhaseModal } from './AddPhaseModal';
 import { taskTypeMeta, statusLabel } from './taskMeta';
 import { statusTone } from '../dashboard/statusTone';
 import { epicProgress, epicLive } from '../../lib/taskTree';
-import { formatCost } from '../../lib/formatTokens';
+import { formatCost } from '../../lib/format';
 import { useTranslation } from '../../lib/i18n';
 
 /** An autopilot epic in the task list: a collapsible parent whose phases stay tucked away

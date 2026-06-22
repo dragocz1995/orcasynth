@@ -5,7 +5,7 @@ import type { Task, PlanResult } from '../../lib/types';
 import { useConfig, useTasks, usePlanJob, useProjects } from '../../lib/queries';
 import { useCreateTask, useUpdateTask, useSpawn, useSetTaskExec, usePlanTask } from '../../lib/mutations';
 import { allModels } from '../../lib/execPresets';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { OrcaApiError, orcaClient } from '../../lib/orcaClient';
 import { Modal, ModalBody } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';

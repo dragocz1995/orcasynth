@@ -3,11 +3,10 @@ import { CheckCircle2, XCircle, Archive, Bot, Clock, CalendarCheck, type LucideI
 import type { Task } from '../../lib/types';
 import { statusLabel } from './taskMeta';
 import { useConfig } from '../../lib/queries';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { taskSessionName } from '../../lib/agentUtils';
 import { parseTs, taskStartedMs } from '../../lib/agentUtils';
-import { formatTaskTime } from '../../lib/formatTime';
-import { formatDuration } from '../../lib/formatDuration';
+import { formatTaskTime, formatDuration } from '../../lib/format';
 import { Modal, ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';

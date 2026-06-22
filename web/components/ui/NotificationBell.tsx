@@ -6,7 +6,7 @@ import { Bell, ShieldAlert } from 'lucide-react';
 import type { Task } from '../../lib/types';
 import { useSessions, useSessionSignals, useTasks, useEscalations } from '../../lib/queries';
 import { needsInputSessions, taskSessionName } from '../../lib/agentUtils';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { NeedsInputRow } from './NeedsInputRow';
 import { useTranslation } from '../../lib/i18n';
 

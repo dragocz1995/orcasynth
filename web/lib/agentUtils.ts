@@ -1,8 +1,15 @@
 import type { Task, DerivedSignal } from './types';
 import { parseAnsi } from './ansi';
-import { compactElapsed } from './formatDuration';
+import { compactElapsed } from './format';
 
 const AGENT_PREFIX = 'agent:';
+const EXEC_PREFIX = 'exec:';
+
+/** The exec spec from a task's `exec:<spec>` label, or '' if it has none. */
+export function taskExec(labels?: string[]): string {
+  const label = labels?.find((l) => l.startsWith(EXEC_PREFIX));
+  return label ? label.slice(EXEC_PREFIX.length) : '';
+}
 
 /** Extract the agent name from a task's `agent:<name>` label, if present. */
 export function taskAgentName(task: Pick<Task, 'labels'>): string | null {

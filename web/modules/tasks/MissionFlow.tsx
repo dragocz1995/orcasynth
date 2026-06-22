@@ -3,7 +3,7 @@ import { Fragment } from 'react';
 import { Rocket } from 'lucide-react';
 import type { Task } from '../../lib/types';
 import { useSessions, useSessionSignals, useConfig } from '../../lib/queries';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { taskAgentName, taskSessionName } from '../../lib/agentUtils';
 import { epicProgress } from '../../lib/taskTree';
 import { ModelIcon } from '../../components/ui/ModelIcon';

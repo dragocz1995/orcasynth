@@ -18,7 +18,7 @@ import { ModelIcon } from '../../components/ui/ModelIcon';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { useTranslation } from '../../lib/i18n';
-import { localDateTime } from '../../lib/formatTime';
+import { localDateTime } from '../../lib/format';
 
 /** Admin-only: toggle chips assigning a user to projects (the access boundary for non-admins). */
 function ProjectChips({ userId, projects }: { userId: number; projects: Project[] }) {

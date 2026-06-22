@@ -21,7 +21,7 @@ import { tailSnippet, taskSessionName, parseTs, taskForSession } from '../../lib
 import { useSessionStall } from '../../lib/useSessionStall';
 import { sessionActivity } from '../../lib/sessionActivity';
 import { epicCapacity } from '../../lib/taskTree';
-import { taskExec } from '../../lib/taskExec';
+import { taskExec } from '../../lib/agentUtils';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { taskTypeMeta, statusLabel } from '../tasks/taskMeta';
 import type { Task, DerivedSignal, Mission } from '../../lib/types';

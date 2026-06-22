@@ -1,7 +1,7 @@
 'use client';
 import type { Task } from './types';
 import { apiErrorMessage } from './orcaClient';
-import { taskExec } from './taskExec';
+import { taskExec } from './agentUtils';
 import { taskSessionName } from './agentUtils';
 import { useSpawn, useKillSession, useSetTaskStatus, useSendInput } from './mutations';
 import { useSessions } from './queries';

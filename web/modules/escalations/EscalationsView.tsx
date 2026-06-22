@@ -4,7 +4,7 @@ import type { Escalation } from '../../lib/escalations';
 import { useEscalations } from '../../lib/queries';
 import { useSetTaskStatus, useResumeMission, useApproveGate } from '../../lib/mutations';
 import { apiErrorMessage } from '../../lib/orcaClient';
-import { formatTaskTime } from '../../lib/formatTime';
+import { formatTaskTime } from '../../lib/format';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { Button } from '../../components/ui/Button';
 import { EmptyState } from '../../components/ui/states';
