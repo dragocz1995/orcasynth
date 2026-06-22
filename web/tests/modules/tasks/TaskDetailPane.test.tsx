@@ -8,9 +8,9 @@ import { ToastProvider } from '../../../components/ui/Toast';
 import { createWrapper } from '../../test-utils';
 
 const server = setupServer(
-  http.get('*/tasks/deps', () => HttpResponse.json([])),
-  http.get('*/activity', () => HttpResponse.json([])),
-  http.get('*/sessions/orca-nova/pane', () => HttpResponse.json({ pane: 'npm test\nall good' })),
+  http.get('*/api/tasks/deps', () => HttpResponse.json([])),
+  http.get('*/api/activity', () => HttpResponse.json([])),
+  http.get('*/api/sessions/orca-nova/pane', () => HttpResponse.json({ pane: 'npm test\nall good' })),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
 

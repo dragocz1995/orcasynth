@@ -9,7 +9,7 @@ import { useToast } from '../../components/ui/Toast';
 
 class FakeES { onmessage = null; addEventListener() {} close() {} constructor(public url: string) {} }
 (globalThis as unknown as { EventSource: typeof FakeES }).EventSource = FakeES;
-const server = setupServer(http.get('http://localhost:4400/health', () => HttpResponse.json({ ok: true })));
+const server = setupServer(http.get('*/api/health', () => HttpResponse.json({ ok: true })));
 beforeAll(() => server.listen({ onUnhandledRequest })); afterAll(() => { localStorage.clear(); server.close(); });
 
 function Probe() { useToast(); return <span>ok</span>; }

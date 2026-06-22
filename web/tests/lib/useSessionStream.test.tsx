@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useSessionStream } from '../../lib/useSessionStream';
-import { setToken, getToken } from '../../lib/token';
 
 class FakeES {
   static readonly CLOSED = 2;
@@ -15,7 +14,7 @@ class FakeES {
   close() { this.closed = true; }
   emit(type: string, data: unknown) { this.listeners[type]?.({ data: JSON.stringify(data) }); }
 }
-beforeEach(() => { (globalThis as unknown as { EventSource: typeof FakeES }).EventSource = FakeES; localStorage.clear(); });
+beforeEach(() => { (globalThis as unknown as { EventSource: typeof FakeES }).EventSource = FakeES; });
 
 describe('useSessionStream', () => {
   it('returns the latest pane from a pane event', () => {
@@ -32,24 +31,21 @@ describe('useSessionStream', () => {
     expect(es.closed).toBe(true);
   });
 
-  // A CLOSED error stops the retry loop but must NOT clear the auth token (EventSource can't tell a
-  // 401 from a benign drop). Clearing it here logged users out spuriously on a hard reload.
-  it('closes on a CLOSED error WITHOUT clearing the token', () => {
-    setToken('still-valid');
+  // A CLOSED error stops the retry loop (close the source); a transient drop is left to the browser's
+  // native auto-reconnect. Auth is never touched here — the session cookie is httpOnly and a real
+  // expiry is handled by the regular request path, not this stream.
+  it('closes the source on a CLOSED error', () => {
     renderHook(() => useSessionStream('orca-A'));
     const es = FakeES.last;
     es.readyState = FakeES.CLOSED;
     es.onerror?.();
-    expect(getToken()).toBe('still-valid');
     expect(es.closed).toBe(true);
   });
-  it('keeps the token on a transient (non-CLOSED) error', () => {
-    setToken('valid');
+  it('leaves the source open on a transient (non-CLOSED) error', () => {
     renderHook(() => useSessionStream('orca-A'));
     const es = FakeES.last;
     es.readyState = 0;
     es.onerror?.();
-    expect(getToken()).toBe('valid');
     expect(es.closed).toBe(false);
   });
 });

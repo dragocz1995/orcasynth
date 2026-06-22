@@ -8,7 +8,7 @@ import { createWrapper } from '../test-utils';
 
 // The project list loads asynchronously (GET /projects) — useProjects is undefined on first render.
 const server = setupServer(
-  http.get('*/projects', () => HttpResponse.json([
+  http.get('*/api/projects', () => HttpResponse.json([
     { id: 1, slug: 'orca', path: '/o', notes: '' },
     { id: 2, slug: 'other', path: '/p2', notes: '' },
   ])),

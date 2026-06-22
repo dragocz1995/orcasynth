@@ -8,8 +8,8 @@ import { ToastProvider } from '../../components/ui/Toast';
 import { createWrapper } from '../test-utils';
 
 const server = setupServer(
-  http.get('*/config', () => HttpResponse.json({ allowedExecs: [], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false } })),
-  http.get('*/integrations/hermes/status', () => HttpResponse.json({ home: '/var/www/.hermes', exists: false, pluginsDir: false, pluginInstalled: false, enabled: false })),
+  http.get('*/api/config', () => HttpResponse.json({ allowedExecs: [], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false } })),
+  http.get('*/api/integrations/hermes/status', () => HttpResponse.json({ home: '/var/www/.hermes', exists: false, pluginsDir: false, pluginInstalled: false, enabled: false })),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterAll(() => server.close());
 

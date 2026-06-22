@@ -9,8 +9,8 @@ import { useUpdateConfig } from '../../lib/mutations';
 
 let body: unknown = null;
 const server = setupServer(
-  http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet'], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false } })),
-  http.put('*/config', async ({ request }) => { body = await request.json(); return HttpResponse.json({ allowedExecs: ['sonnet'], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: true } }); }),
+  http.get('*/api/config', () => HttpResponse.json({ allowedExecs: ['sonnet'], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: false } })),
+  http.put('*/api/config', async ({ request }) => { body = await request.json(); return HttpResponse.json({ allowedExecs: ['sonnet'], autopilot: { model: 'm', apiUrl: 'u', apiKeySet: true } }); }),
 );
 beforeAll(() => server.listen()); afterAll(() => server.close());
 

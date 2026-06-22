@@ -10,8 +10,8 @@ import { createWrapper } from '../test-utils';
 
 let spawnBody: unknown = null;
 const server = setupServer(
-  http.get('http://localhost:4400/tasks', () => HttpResponse.json([{ id: 'orca-1', title: 'Build', status: 'in_progress', type: 'task', labels: [] }])),
-  http.post('http://localhost:4400/sessions', async ({ request }) => { spawnBody = await request.json(); return HttpResponse.json({ session: 'orca-A' }, { status: 201 }); }),
+  http.get('*/api/tasks', () => HttpResponse.json([{ id: 'orca-1', title: 'Build', status: 'in_progress', type: 'task', labels: [] }])),
+  http.post('*/api/sessions', async ({ request }) => { spawnBody = await request.json(); return HttpResponse.json({ session: 'orca-A' }, { status: 201 }); }),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterAll(() => server.close());
 

@@ -12,7 +12,7 @@ const TWO: Project[] = [
 ];
 
 function projectsHandler(projects: Project[]) {
-  return http.get('http://localhost:4400/projects', () => HttpResponse.json(projects));
+  return http.get('*/api/projects', () => HttpResponse.json(projects));
 }
 
 const server = setupServer(projectsHandler(TWO));

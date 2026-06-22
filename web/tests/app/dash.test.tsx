@@ -7,10 +7,10 @@ import { ToastProvider } from '../../components/ui/Toast';
 import { createWrapper } from '../test-utils';
 
 const server = setupServer(
-  http.get('http://localhost:4400/tasks', () => HttpResponse.json([{ id: 'orca-1', title: 'Build', status: 'open' }])),
-  http.get('http://localhost:4400/sessions', () => HttpResponse.json([{ name: 'orca-SwiftLake', role: 'agent', agent: 'SwiftLake' }])),
-  http.get('http://localhost:4400/missions', () => HttpResponse.json([])),
-  http.get('http://localhost:4400/sessions/:name/pane', () => HttpResponse.json({ pane: '' })),
+  http.get('*/api/tasks', () => HttpResponse.json([{ id: 'orca-1', title: 'Build', status: 'open' }])),
+  http.get('*/api/sessions', () => HttpResponse.json([{ name: 'orca-SwiftLake', role: 'agent', agent: 'SwiftLake' }])),
+  http.get('*/api/missions', () => HttpResponse.json([])),
+  http.get('*/api/sessions/:name/pane', () => HttpResponse.json({ pane: '' })),
 );
 beforeAll(() => server.listen()); afterAll(() => server.close());
 

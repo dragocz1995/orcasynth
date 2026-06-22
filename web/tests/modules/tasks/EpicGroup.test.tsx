@@ -14,12 +14,12 @@ const phases: Task[] = [
 ];
 
 const server = setupServer(
-  http.get('http://localhost:4400/sessions', () => HttpResponse.json([])),
-  http.get('http://localhost:4400/projects', () => HttpResponse.json([{ id: 1, slug: 'orca', path: '/var/www/orca', notes: '' }])),
+  http.get('*/api/sessions', () => HttpResponse.json([])),
+  http.get('*/api/projects', () => HttpResponse.json([{ id: 1, slug: 'orca', path: '/var/www/orca', notes: '' }])),
   // EpicGroup now drives the mission lifecycle + rolled-up cost, so it reads these too.
-  http.get('http://localhost:4400/missions', () => HttpResponse.json([])),
-  http.get('http://localhost:4400/config', () => HttpResponse.json({})),
-  http.get('http://localhost:4400/tasks/:id/usage', () => HttpResponse.json({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, costUsd: null })),
+  http.get('*/api/missions', () => HttpResponse.json([])),
+  http.get('*/api/config', () => HttpResponse.json({})),
+  http.get('*/api/tasks/:id/usage', () => HttpResponse.json({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0, costUsd: null })),
 );
 beforeAll(() => server.listen());
 afterEach(() => server.resetHandlers());
@@ -48,7 +48,7 @@ describe('EpicGroup — delete mission', () => {
   it('confirming the delete-mission action issues DELETE /tasks/:id?subtree=1', async () => {
     let deleted: { id: string; subtree: string | null } | null = null;
     server.use(
-      http.delete('http://localhost:4400/tasks/:id', ({ params, request }) => {
+      http.delete('*/api/tasks/:id', ({ params, request }) => {
         const url = new URL(request.url);
         deleted = { id: params.id as string, subtree: url.searchParams.get('subtree') };
         return HttpResponse.json({ ok: true, tasks: 3 });
@@ -75,7 +75,7 @@ describe('EpicGroup — delete mission', () => {
   it('cancelling the confirm dialog does not delete', async () => {
     const calls = vi.fn();
     server.use(
-      http.delete('http://localhost:4400/tasks/:id', () => { calls(); return HttpResponse.json({ ok: true, tasks: 0 }); }),
+      http.delete('*/api/tasks/:id', () => { calls(); return HttpResponse.json({ ok: true, tasks: 0 }); }),
     );
 
     renderEpic();

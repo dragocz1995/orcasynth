@@ -16,9 +16,9 @@ describe('AccountView', () => {
   it('shows the user identity and their allowed models, and saves a chosen default', async () => {
     let patched: Record<string, unknown> | null = null;
     server.use(
-      http.get('*/auth/me', () => HttpResponse.json({ user: meUser() })),
-      http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], hiddenPresets: [], autopilot: {}, providers: {}, defaults: {} })),
-      http.patch('*/auth/me', async ({ request }) => { patched = await request.json() as Record<string, unknown>; return HttpResponse.json(meUser({ default_exec: 'sonnet' })); }),
+      http.get('*/api/auth/me', () => HttpResponse.json({ user: meUser() })),
+      http.get('*/api/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], hiddenPresets: [], autopilot: {}, providers: {}, defaults: {} })),
+      http.patch('*/api/auth/me', async ({ request }) => { patched = await request.json() as Record<string, unknown>; return HttpResponse.json(meUser({ default_exec: 'sonnet' })); }),
     );
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><AccountView /></ToastProvider></Wrapper>);

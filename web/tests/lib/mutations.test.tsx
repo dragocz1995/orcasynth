@@ -8,13 +8,13 @@ import { useSpawn, useAssignProject } from '../../lib/mutations';
 
 let lastAssignCall: { method: string; userId: string; projectId?: string } | null = null;
 const server = setupServer(
-  http.post('http://localhost:4400/sessions', () => HttpResponse.json({ session: 'orca-A' }, { status: 201 })),
-  http.post('http://localhost:4400/users/:userId/projects', async ({ params, request }) => {
+  http.post('*/api/sessions', () => HttpResponse.json({ session: 'orca-A' }, { status: 201 })),
+  http.post('*/api/users/:userId/projects', async ({ params, request }) => {
     const body = (await request.json()) as { projectId: number };
     lastAssignCall = { method: 'POST', userId: String(params.userId), projectId: String(body.projectId) };
     return HttpResponse.json({ ok: true });
   }),
-  http.delete('http://localhost:4400/users/:userId/projects/:projectId', ({ params }) => {
+  http.delete('*/api/users/:userId/projects/:projectId', ({ params }) => {
     lastAssignCall = { method: 'DELETE', userId: String(params.userId), projectId: String(params.projectId) };
     return HttpResponse.json({ ok: true });
   }),

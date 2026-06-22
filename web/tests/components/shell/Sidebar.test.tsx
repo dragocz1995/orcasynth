@@ -7,7 +7,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => '/dash' }));
 import { Sidebar } from '../../../components/shell/Sidebar';
 import { createWrapper } from '../../test-utils';
 
-const server = setupServer(http.get('*/health', () => HttpResponse.json({ ok: true })));
+const server = setupServer(http.get('*/api/health', () => HttpResponse.json({ ok: true })));
 beforeAll(() => server.listen({ onUnhandledRequest })); afterAll(() => server.close());
 beforeEach(() => localStorage.clear());
 

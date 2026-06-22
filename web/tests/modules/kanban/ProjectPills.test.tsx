@@ -19,8 +19,8 @@ const ALL = [
 
 let lastTasksUrl = '';
 const server = setupServer(
-  http.get('http://localhost:4400/projects', () => HttpResponse.json(PROJECTS)),
-  http.get('http://localhost:4400/tasks', ({ request }) => {
+  http.get('*/api/projects', () => HttpResponse.json(PROJECTS)),
+  http.get('*/api/tasks', ({ request }) => {
     lastTasksUrl = request.url;
     const u = new URL(request.url);
     const pid = u.searchParams.get('project_id');

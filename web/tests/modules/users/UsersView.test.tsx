@@ -8,7 +8,7 @@ import { ToastProvider } from '../../../components/ui/Toast';
 import { createWrapper } from '../../test-utils';
 
 const server = setupServer(
-  http.get('*/users', () => HttpResponse.json([
+  http.get('*/api/users', () => HttpResponse.json([
     { id: 1, username: 'alice', created_at: '2026-01-01', is_admin: false, allowed_execs: [] },
     { id: 2, username: 'bob', created_at: '2026-01-02', is_admin: false, allowed_execs: [] },
   ])),
@@ -26,14 +26,14 @@ describe('UsersView', () => {
   it('admin sees role badges + model chips and can restrict a user to a model', async () => {
     let patched: { id?: string; body?: unknown } = {};
     server.use(
-      http.get('*/auth/me', () => HttpResponse.json({ user: { id: 1, username: 'alice', created_at: '2026-01-01', is_admin: true, allowed_execs: [] } })),
-      http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], hiddenPresets: [], autopilot: {}, providers: {}, defaults: {} })),
-      http.get('*/users', () => HttpResponse.json([
+      http.get('*/api/auth/me', () => HttpResponse.json({ user: { id: 1, username: 'alice', created_at: '2026-01-01', is_admin: true, allowed_execs: [] } })),
+      http.get('*/api/config', () => HttpResponse.json({ allowedExecs: ['sonnet', 'codex:gpt-5.4'], customModels: [], hiddenPresets: [], autopilot: {}, providers: {}, defaults: {} })),
+      http.get('*/api/users', () => HttpResponse.json([
         { id: 1, username: 'alice', created_at: '2026-01-01', is_admin: true, allowed_execs: [] },
         { id: 2, username: 'bob', created_at: '2026-01-02', is_admin: false, allowed_execs: [] },
       ])),
-      http.get('*/users/:id/projects', () => HttpResponse.json([])),
-      http.patch('*/users/:id', async ({ params, request }) => { patched = { id: String(params.id), body: await request.json() }; return HttpResponse.json({ id: 2, username: 'bob', is_admin: false, allowed_execs: ['sonnet'] }); }),
+      http.get('*/api/users/:id/projects', () => HttpResponse.json([])),
+      http.patch('*/api/users/:id', async ({ params, request }) => { patched = { id: String(params.id), body: await request.json() }; return HttpResponse.json({ id: 2, username: 'bob', is_admin: false, allowed_execs: ['sonnet'] }); }),
     );
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><UsersView /></ToastProvider></Wrapper>);

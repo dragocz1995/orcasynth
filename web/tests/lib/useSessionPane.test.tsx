@@ -7,7 +7,7 @@ import { createWrapper } from '../test-utils';
 
 let paneHits = 0;
 const server = setupServer(
-  http.get('http://localhost:4400/sessions/:name/pane', () => {
+  http.get('*/api/sessions/:name/pane', () => {
     paneHits++;
     return HttpResponse.json({ pane: 'line1\nline2\nline3' });
   }),

@@ -34,10 +34,10 @@ const TASKS = [
 ];
 
 const server = setupServer(
-  http.get('*/activity', () => HttpResponse.json(fixture())),
-  http.get('*/tasks', () => HttpResponse.json(TASKS)),
-  http.get('*/projects/:id/changed', () => HttpResponse.json({ changed: ['src/foo.ts'] })),
-  http.get('*/projects/:id/changes', () => HttpResponse.json({ diff: '--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new line here' })),
+  http.get('*/api/activity', () => HttpResponse.json(fixture())),
+  http.get('*/api/tasks', () => HttpResponse.json(TASKS)),
+  http.get('*/api/projects/:id/changed', () => HttpResponse.json({ changed: ['src/foo.ts'] })),
+  http.get('*/api/projects/:id/changes', () => HttpResponse.json({ diff: '--- a/src/foo.ts\n+++ b/src/foo.ts\n@@ -1 +1 @@\n-old\n+new line here' })),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
 

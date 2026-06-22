@@ -3,7 +3,6 @@ import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useOrcaEvents } from '../../lib/useOrcaEvents';
-import { setToken, getToken } from '../../lib/token';
 
 class FakeES {
   static readonly CLOSED = 2;
@@ -24,7 +23,7 @@ class FakeES {
   }
 }
 
-beforeEach(() => { (globalThis as unknown as { EventSource: unknown }).EventSource = FakeES; localStorage.clear(); });
+beforeEach(() => { (globalThis as unknown as { EventSource: unknown }).EventSource = FakeES; });
 
 function wrap() {
   const client = new QueryClient();
@@ -92,24 +91,20 @@ describe('useOrcaEvents', () => {
   // A CLOSED error stops the retry loop but must NOT clear the auth token: EventSource can't tell a
   // 401 from a benign drop (proxy/SSE timeout, daemon restart, hard-reload race), so clearing here
   // logged users out spuriously. Real auth expiry is handled by the regular request path.
-  it('closes on a CLOSED error WITHOUT clearing the token', () => {
-    setToken('still-valid');
+  it('closes the source on a CLOSED error', () => {
     const { wrapper } = wrap();
     renderHook(() => useOrcaEvents(), { wrapper });
     const es = FakeES.last;
     es.readyState = FakeES.CLOSED;
     es.onerror?.();
-    expect(getToken()).toBe('still-valid'); // never logged out by an SSE drop
     expect(es.closed).toBe(true);
   });
-  it('keeps the token on a transient (non-CLOSED) error', () => {
-    setToken('valid');
+  it('leaves the source open on a transient (non-CLOSED) error', () => {
     const { wrapper } = wrap();
     renderHook(() => useOrcaEvents(), { wrapper });
     const es = FakeES.last;
     es.readyState = 0; // CONNECTING — browser will retry on its own
     es.onerror?.();
-    expect(getToken()).toBe('valid');
     expect(es.closed).toBe(false);
   });
 });

@@ -6,7 +6,7 @@ import { useTasks } from '../../lib/queries';
 import { createWrapper } from '../test-utils';
 
 const server = setupServer(
-  http.get('http://localhost:4400/tasks', () =>
+  http.get('*/api/tasks', () =>
     HttpResponse.json([{ id: 'orca-1', title: 'A', status: 'open' }]),
   ),
 );

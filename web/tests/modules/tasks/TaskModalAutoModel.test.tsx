@@ -10,11 +10,11 @@ import { createWrapper } from '../../test-utils';
 interface PlanBody { autoModel?: boolean; exec?: string }
 let planBody: PlanBody | null = null;
 const server = setupServer(
-  http.get('*/config', () => HttpResponse.json({ allowedExecs: ['sonnet'], customModels: [], hiddenPresets: [], modelNotes: { sonnet: 'coder' }, autopilot: { model: 'm', overseerModel: '', apiUrl: 'u', apiKeySet: true, notes: '', prompt: '', pilotExec: '', overseerExec: '', reviewOnDone: false }, providers: {}, defaults: { exec: 'sonnet', autonomy: 'L3', maxSessions: 1 }, security: { tokenTtlDays: 30 } })),
-  http.get('*/tasks', () => HttpResponse.json([])),
-  http.get('*/projects', () => HttpResponse.json([])),
-  http.post('*/tasks/plan', async ({ request }) => { planBody = await request.json() as PlanBody; return HttpResponse.json({ jobId: 'pj-1', epicId: 'e1' }, { status: 202 }); }),
-  http.get('*/plan/pj-1', () => HttpResponse.json({ id: 'pj-1', status: 'done', phases: [], epicId: 'e1', goal: '', projectId: 1 })),
+  http.get('*/api/config', () => HttpResponse.json({ allowedExecs: ['sonnet'], customModels: [], hiddenPresets: [], modelNotes: { sonnet: 'coder' }, autopilot: { model: 'm', overseerModel: '', apiUrl: 'u', apiKeySet: true, notes: '', prompt: '', pilotExec: '', overseerExec: '', reviewOnDone: false }, providers: {}, defaults: { exec: 'sonnet', autonomy: 'L3', maxSessions: 1 }, security: { tokenTtlDays: 30 } })),
+  http.get('*/api/tasks', () => HttpResponse.json([])),
+  http.get('*/api/projects', () => HttpResponse.json([])),
+  http.post('*/api/tasks/plan', async ({ request }) => { planBody = await request.json() as PlanBody; return HttpResponse.json({ jobId: 'pj-1', epicId: 'e1' }, { status: 202 }); }),
+  http.get('*/api/plan/pj-1', () => HttpResponse.json({ id: 'pj-1', status: 'done', phases: [], epicId: 'e1', goal: '', projectId: 1 })),
 );
 beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => server.resetHandlers()); afterAll(() => server.close());
 
