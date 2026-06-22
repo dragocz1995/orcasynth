@@ -22,25 +22,30 @@ export async function menu(env: NodeJS.ProcessEnv, version: string): Promise<voi
   for (;;) {
     const st = await status(env);
     const running = st.daemon.running;
+    const webUrl = `http://localhost:${st.web.port || 4500}`;
+    // At-a-glance state as the prompt title, so it refreshes every loop without piling up notes.
+    const state = running
+      ? `${st.daemon.healthy && st.web.healthy ? '● ' : '◐ '}orca is running  ·  ${webUrl}`
+      : '○ orca is stopped';
     const action = await p.select({
-      message: 'What do you want to do?',
+      message: state,
       options: [
         running
           ? { value: 'down', label: 'Stop orca', hint: 'daemon + web' }
           : { value: 'up', label: 'Start orca', hint: 'daemon + web' },
-        { value: 'status', label: 'Status' },
-        { value: 'open', label: 'Open web UI', hint: 'http://localhost:4500' },
+        { value: 'status', label: 'Status', hint: 'service health + ports' },
+        { value: 'open', label: 'Open web UI', hint: webUrl },
         { value: 'update', label: 'Update', hint: 'check npm for a newer version' },
         { value: 'exit', label: 'Exit' },
       ],
     });
     if (p.isCancel(action) || action === 'exit') break;
 
-    if (action === 'status') { p.note(formatStatus(st), 'Status'); continue; }
+    if (action === 'status') { p.note(formatStatus(st, version), 'Status'); continue; }
     if (action === 'open') {
       if (!running) { await runLifecycle('up', env, deps); }
-      openUrl('http://localhost:4500');
-      p.log.success('Opening http://localhost:4500');
+      openUrl(webUrl);
+      p.log.success(`Opening ${webUrl}`);
       continue;
     }
     if (action === 'up') {
@@ -48,7 +53,7 @@ export async function menu(env: NodeJS.ProcessEnv, version: string): Promise<voi
       // A brand-new install has no admin yet — offer the wizard right after the daemon is up.
       try {
         if (await isFirstRun(fetch, BASE) && await runSetupWizard(BASE)) {
-          p.log.success('Sign in at http://localhost:4500');
+          p.log.success(`Sign in at ${webUrl}`);
         }
       } catch (e) { p.log.warn(`Skipped setup: ${(e as Error).message}`); }
       continue;

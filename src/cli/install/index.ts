@@ -52,6 +52,11 @@ function bail(v: unknown): asserts v is string {
 }
 
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  // Off a TTY (unattended / CI / piped logs) a spinner just spams frames — emit one line per step.
+  if (!process.stdout.isTTY) {
+    try { const out = await fn(); p.log.success(label); return out; }
+    catch (e) { p.log.error(`${label} — failed`); throw e; }
+  }
   const s = p.spinner();
   s.start(label);
   try { const out = await fn(); s.stop(`${label} ✓`); return out; }
@@ -291,6 +296,21 @@ async function chooseProxy(r: Runner): Promise<{ domain: string | null; proxyPre
 
 // ── entry point ──────────────────────────────────────────────────────────────
 
+/** Human recap of what the wizard is about to do — shown for confirmation before anything is touched. */
+function planSummary(plan: InstallPlan): string {
+  const pad = (s: string) => s.padEnd(9);
+  const web = plan.domain
+    ? `${plan.proxyPreference} → ${plan.domain}${plan.tls ? ' + HTTPS (Let’s Encrypt)' : ' (HTTP only)'}`
+    : `localhost only — http://127.0.0.1:${WEB_PORT} (no reverse proxy)`;
+  return [
+    `${pad('User')}${plan.user.mode === 'create' ? `create system user "${plan.user.username}"` : `existing user "${plan.user.username}"`}`,
+    `${pad('Agents')}${plan.agents.length ? plan.agents.join(', ') : 'none (install later)'}`,
+    `${pad('tmux')}${plan.installTmux ? 'install' : 'present / skipped'}`,
+    `${pad('Web')}${web}`,
+    `${pad('Admin')}${plan.admin ? plan.admin.username : 'create interactively once the daemon is up'}`,
+  ].join('\n');
+}
+
 /** `orca install` — provision a fresh Debian/Ubuntu box. Run as root. Pass `--unattended` (with flags)
  *  for a non-interactive install; otherwise an interactive wizard collects every answer. */
 export async function install(args: string[] = []): Promise<void> {
@@ -320,16 +340,31 @@ export async function install(args: string[] = []): Promise<void> {
     plan = { installTmux, user, agents, ...proxy, admin: null };
   }
 
+  // Recap everything before touching the system — last chance to back out.
+  p.note(planSummary(plan), 'Install plan');
+  if (!unattended) {
+    const go = await p.confirm({ message: 'Proceed with installation?' });
+    if (p.isCancel(go) || !go) { p.cancel('Nothing was changed.'); process.exit(0); }
+  }
+
   await execute(r, plan);
 
   // Interactive: now that the daemon is live, run the shared first-run wizard for the admin + LLM.
+  let adminUser = plan.admin?.username ?? null;
   if (!unattended) {
     p.log.step('Create the first admin account');
     const creds = await runSetupWizard(base);
-    if (creds) await step('Verifying login', () => loginSmokeTest(creds.username, creds.password));
+    if (creds) { adminUser = creds.username; await step('Verifying login', () => loginSmokeTest(creds.username, creds.password)); }
   }
 
   const url = plan.domain ? (plan.tls ? `https://${plan.domain}` : `http://${plan.domain}`) : `http://127.0.0.1:${WEB_PORT}`;
-  p.log.info('Manage the services with: systemctl status orca-daemon orca-web');
-  p.outro(`Done — ORCA is live at ${url} 🐋`);
+  const summary = [
+    `Open       ${url}`,
+    adminUser ? `Sign in    ${adminUser}` : 'Sign in    create an admin in the web UI',
+    `Status     systemctl status orca-daemon orca-web`,
+    `Logs       journalctl -u orca-daemon -f`,
+    `Restart    systemctl restart orca-daemon orca-web`,
+  ].join('\n');
+  p.note(summary, 'ORCA is ready 🐋');
+  p.outro(`Done — ORCA is live at ${url}`);
 }

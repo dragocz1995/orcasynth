@@ -22,15 +22,17 @@ export function defaultLifecycleDeps(version: string): LifecycleDeps {
   };
 }
 
-/** Render a one-glance status block. A service is shown stopped, running-but-unhealthy, or healthy. */
-export function formatStatus(s: { daemon: SvcStatus; web: SvcStatus }): string {
+/** Render a one-glance status block. A service is shown stopped, running-but-unhealthy, or healthy.
+ *  When `version` is given, a header line is prepended. */
+export function formatStatus(s: { daemon: SvcStatus; web: SvcStatus }, version?: string): string {
   const line = (name: string, svc: SvcStatus, url: string): string => {
-    if (!svc.running) return `  ${name.padEnd(7)} ○ stopped`;
+    if (!svc.running) return `  ${name.padEnd(7)} ○  stopped`;
     const dot = svc.healthy ? '●' : '◐';
     const health = svc.healthy ? 'healthy' : 'starting…';
-    return `  ${name.padEnd(7)} ${dot} running  :${svc.port}  ${health}  ${svc.healthy ? url : ''}`.trimEnd();
+    return `  ${name.padEnd(7)} ${dot}  running  :${svc.port}  ${health}${svc.healthy && url ? `  ${url}` : ''}`.trimEnd();
   };
-  return [line('daemon', s.daemon, ''), line('web', s.web, `http://localhost:${s.web.port}`)].join('\n');
+  const body = [line('daemon', s.daemon, ''), line('web', s.web, `http://localhost:${s.web.port || 4500}`)];
+  return (version ? [`  orcasynth v${version}`, '', ...body] : body).join('\n');
 }
 
 /** Dispatch the install-lifecycle commands. Returns true when handled, false for anything else (the
@@ -50,7 +52,7 @@ export async function runLifecycle(cmd: string | undefined, env: NodeJS.ProcessE
       return true;
     }
     case 'status': {
-      deps.log(formatStatus(await deps.status(env)));
+      deps.log(formatStatus(await deps.status(env), deps.version));
       return true;
     }
     case 'update': {
