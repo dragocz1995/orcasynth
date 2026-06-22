@@ -51,6 +51,12 @@ function bail(v: unknown): asserts v is string {
   if (p.isCancel(v)) { p.cancel('Installation cancelled.'); process.exit(1); }
 }
 
+/** True for a bare IPv4/IPv6 host. Let's Encrypt only issues for registered domain names, so we never
+ *  offer (or attempt) HTTPS for an IP — certbot would fail every time. */
+export function isIpAddress(host: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(':');
+}
+
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
   // Off a TTY (unattended / CI / piped logs) a spinner just spams frames — emit one line per step.
   if (!process.stdout.isTTY) {
@@ -160,8 +166,9 @@ async function provisionAdmin(answers: SetupAnswers): Promise<void> {
 }
 
 /** Provision a box from a fully-resolved plan. Used directly by the unattended path; the interactive
- *  path drives the same executors with spinners and inline prompts. */
-async function execute(r: Runner, plan: InstallPlan): Promise<void> {
+ *  path drives the same executors with spinners and inline prompts. Returns whether TLS was obtained,
+ *  so the caller can build the final URL (a non-fatal certbot failure leaves the site on HTTP). */
+async function execute(r: Runner, plan: InstallPlan): Promise<{ tls: boolean }> {
   if (plan.installTmux) await step('Installing tmux', () => aptInstall(r, 'tmux'));
 
   const { home } = await step(`Service user "${plan.user.username}"`, () => ensureServiceUser(r, plan.user));
@@ -176,16 +183,24 @@ async function execute(r: Runner, plan: InstallPlan): Promise<void> {
   const ready = await step('Waiting for the daemon', () => waitForDaemon());
   if (!ready) throw new Error('daemon did not become reachable — check: journalctl -u orca-daemon');
 
+  let tlsOk = false;
   if (plan.domain) {
     const kind = await step('Configuring reverse proxy', async () => {
       const k = await resolveProxy(r, plan.proxyPreference);
       await configureVhost(r, k, plan.domain!);
       return k;
     });
-    if (plan.tls) await step('Requesting HTTPS certificate', () => obtainTls(r, kind, plan.domain!, plan.email));
+    // TLS is the last, optional, most failure-prone step (DNS not pointed yet, rate limits, IPs). A
+    // failure here must NOT abort the install — the site already serves over HTTP and the admin still
+    // needs creating — so we warn and carry on rather than throwing.
+    if (plan.tls) {
+      try { await step('Requesting HTTPS certificate', () => obtainTls(r, kind, plan.domain!, plan.email)); tlsOk = true; }
+      catch (e) { p.log.warn(`HTTPS setup failed: ${(e as Error).message}\nThe site is up over HTTP — re-run certbot once the domain's DNS points here.`); }
+    }
   }
 
   if (plan.admin) await step('Creating admin + verifying login', () => provisionAdmin(plan.admin!));
+  return { tls: tlsOk };
 }
 
 /** npm package for an agent CLI id (so the executor needn't carry the full AgentCli around). */
@@ -227,7 +242,8 @@ async function planFromArgs(r: Runner, args: string[]): Promise<InstallPlan> {
     agents,
     domain,
     proxyPreference: flag(args, '--proxy') === 'apache' ? 'apache' : 'nginx',
-    tls: domain !== null && !args.includes('--no-tls'),
+    // No HTTPS for a bare IP — Let's Encrypt refuses it.
+    tls: domain !== null && !isIpAddress(domain) && !args.includes('--no-tls'),
     email: flag(args, '--email') ?? null,
     admin,
   };
@@ -285,6 +301,12 @@ async function chooseProxy(r: Runner): Promise<{ domain: string | null; proxyPre
     });
     bail(which);
     proxyPreference = which as ProxyKind;
+  }
+
+  // Let's Encrypt can't certify a bare IP, so don't even offer HTTPS for one — serve over HTTP.
+  if (isIpAddress(domain.trim())) {
+    p.log.info(`${domain.trim()} is an IP address — serving the UI over HTTP (Let's Encrypt requires a domain name).`);
+    return { domain: domain.trim(), proxyPreference, tls: false, email: null };
   }
 
   const wantTls = await p.confirm({ message: `Obtain a free HTTPS certificate for ${domain.trim()} via Let's Encrypt?` });
@@ -347,7 +369,7 @@ export async function install(args: string[] = []): Promise<void> {
     if (p.isCancel(go) || !go) { p.cancel('Nothing was changed.'); process.exit(0); }
   }
 
-  await execute(r, plan);
+  const { tls } = await execute(r, plan);
 
   // Interactive: now that the daemon is live, run the shared first-run wizard for the admin + LLM.
   let adminUser = plan.admin?.username ?? null;
@@ -357,7 +379,7 @@ export async function install(args: string[] = []): Promise<void> {
     if (creds) { adminUser = creds.username; await step('Verifying login', () => loginSmokeTest(creds.username, creds.password)); }
   }
 
-  const url = plan.domain ? (plan.tls ? `https://${plan.domain}` : `http://${plan.domain}`) : `http://127.0.0.1:${WEB_PORT}`;
+  const url = plan.domain ? (tls ? `https://${plan.domain}` : `http://${plan.domain}`) : `http://127.0.0.1:${WEB_PORT}`;
   const summary = [
     `Open       ${url}`,
     adminUser ? `Sign in    ${adminUser}` : 'Sign in    create an admin in the web UI',

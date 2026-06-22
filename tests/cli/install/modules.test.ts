@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AGENT_CLIS, detectAgentClis, installCommand } from '../../../src/cli/install/agentClis.js';
 import { preflight, preflightBlockers } from '../../../src/cli/install/preflight.js';
 import { userHome, ensureServiceUser } from '../../../src/cli/install/serviceUser.js';
+import { isIpAddress } from '../../../src/cli/install/index.js';
 import type { Runner, ExecResult } from '../../../src/cli/install/runner.js';
 
 function runner(over: Partial<Runner> = {}): Runner {
@@ -61,6 +62,15 @@ describe('install/preflight', () => {
     expect(blockers.join(' ')).toMatch(/root/i);
     expect(blockers.join(' ')).toMatch(/Node/i);
     expect(blockers.join(' ')).toMatch(/apt/i);
+  });
+});
+
+describe('install/isIpAddress (no Let’s Encrypt for IPs)', () => {
+  it('detects IPv4 and IPv6 addresses', () => {
+    for (const ip of ['188.130.140.172', '127.0.0.1', '10.0.0.1', '::1', '2001:db8::1']) expect(isIpAddress(ip)).toBe(true);
+  });
+  it('treats domain names as non-IP', () => {
+    for (const d of ['orca.example.com', 'example.com', 'my-host.dev']) expect(isIpAddress(d)).toBe(false);
   });
 });
 
