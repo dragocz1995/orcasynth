@@ -85,6 +85,10 @@ export async function start(env: NodeJS.ProcessEnv, deps: StartDeps): Promise<Ru
   const now = deps.now ?? (() => new Date().toISOString());
   const pollMs = deps.pollMs ?? 200;
   const attempts = deps.attempts ?? 100;
+  // Ports are overridable (ORCA_PORT / ORCA_WEB_PORT) so a second instance — or a smoke test — can run
+  // alongside an existing one. Defaults are the conventional 4400/4500.
+  const daemonPort = Number(env.ORCA_PORT ?? DAEMON_PORT);
+  const webPort = Number(env.ORCA_WEB_PORT ?? WEB_PORT);
   const childEnv = { ...env, ORCA_DB: dbPath(env), ORCA_LOG_DIR: logDir(env), ORCA_AUTOSTART: '0' };
 
   const launch = (entry: string, extra: NodeJS.ProcessEnv) => {
@@ -95,17 +99,17 @@ export async function start(env: NodeJS.ProcessEnv, deps: StartDeps): Promise<Ru
   };
 
   const existing = readState(env);
-  const daemonPid = existing && isAlive(existing.daemon.pid) ? existing.daemon.pid : launch(daemonEntry(), { ORCA_PORT: String(DAEMON_PORT) });
+  const daemonPid = existing && isAlive(existing.daemon.pid) ? existing.daemon.pid : launch(daemonEntry(), { ORCA_PORT: String(daemonPort) });
   const webPid = existing && isAlive(existing.web.pid) ? existing.web.pid
-    : launch(webServer(), { PORT: String(WEB_PORT), HOSTNAME: '127.0.0.1', ORCA_DAEMON_URL: `http://127.0.0.1:${DAEMON_PORT}` });
+    : launch(webServer(), { PORT: String(webPort), HOSTNAME: '127.0.0.1', ORCA_DAEMON_URL: `http://127.0.0.1:${daemonPort}` });
 
   // Wait for the daemon to answer; the web proxies it, so it comes up second.
   for (let i = 0; i < attempts; i++) {
-    if (await portHealthy(fetchFn, DAEMON_PORT, '/health')) break;
+    if (await portHealthy(fetchFn, daemonPort, '/health')) break;
     await new Promise((r) => setTimeout(r, pollMs));
   }
 
-  const state: RunState = { daemon: { pid: daemonPid, port: DAEMON_PORT }, web: { pid: webPid, port: WEB_PORT }, version: deps.version, startedAt: now() };
+  const state: RunState = { daemon: { pid: daemonPid, port: daemonPort }, web: { pid: webPid, port: webPort }, version: deps.version, startedAt: now() };
   writeState(env, state);
   return state;
 }

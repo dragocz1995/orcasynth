@@ -30,7 +30,7 @@ export function formatStatus(s: { daemon: SvcStatus; web: SvcStatus }): string {
     const health = svc.healthy ? 'healthy' : 'starting…';
     return `  ${name.padEnd(7)} ${dot} running  :${svc.port}  ${health}  ${svc.healthy ? url : ''}`.trimEnd();
   };
-  return [line('daemon', s.daemon, ''), line('web', s.web, 'http://localhost:4500')].join('\n');
+  return [line('daemon', s.daemon, ''), line('web', s.web, `http://localhost:${s.web.port}`)].join('\n');
 }
 
 /** Dispatch the install-lifecycle commands. Returns true when handled, false for anything else (the
