@@ -5,8 +5,9 @@ import { logger } from '../shared/logger.js';
 
 const log = logger('spawn');
 
-/** How a spawned agent reaches back to the daemon to close its task. */
-export interface OrcaCliConfig { cliPath: string; url: string; token: string }
+/** How a spawned agent reaches back to the daemon to close its task. `cli` is the full orca
+ *  invocation: the global `orca` command in production, or `node <dist/cli/index.js>` in a checkout. */
+export interface OrcaCliConfig { cli: string; url: string; token: string }
 /** Per-program binary override + extra args (configured in Settings → Providers). */
 export type ProviderResolver = (program: string) => { bin?: string; args?: string } | undefined;
 
@@ -16,13 +17,13 @@ export class SpawnService {
     this.d.agents.upsert({ project_id: input.projectId, name: input.agentName, program: input.spec.program, model: input.spec.model });
     const session = `orca-${input.agentName}`;
     const orca = this.d.orca;
-    // Invoke the daemon's own CLI by absolute path via node, so agents never depend on `orca` being
-    // on PATH (it isn't). Shared by the close commands and the worker preamble's read-only verbs.
-    const cli = orca ? `node ${orca.cliPath}` : undefined;
-    const closeCommand = orca ? `node ${orca.cliPath} close ${input.taskId}` : undefined;
+    // The agent reaches the daemon through the resolved orca CLI (`orca` globally, or `node <path>`
+    // in a checkout). Shared by the close commands and the worker preamble's read-only verbs.
+    const cli = orca ? orca.cli : undefined;
+    const closeCommand = orca ? `${orca.cli} close ${input.taskId}` : undefined;
     // A phase agent gets a close command for its parent epic too, so the final phase can
     // close the epic itself with its own overall result summary.
-    const epicCloseCommand = orca && input.epicId ? `node ${orca.cliPath} close ${input.epicId}` : undefined;
+    const epicCloseCommand = orca && input.epicId ? `${orca.cli} close ${input.epicId}` : undefined;
     // Merge any caller-supplied env (e.g. ORCA_PLAN_JOB / ORCA_MISSION for reasoning agents) on top
     // of the daemon-reach env. extraEnv alone still flows through when no orca config is present.
     const env = orca ? { ORCA_URL: orca.url, ORCA_TOKEN: orca.token, ...input.extraEnv } : input.extraEnv;

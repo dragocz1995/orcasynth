@@ -98,10 +98,14 @@ export function buildApp(opts: BuildOpts) {
   // across restarts (see ensureAgentToken) so a restart doesn't 401 in-flight agents. Owned by the
   // lowest-id user purely to satisfy the FK; the scope, not the owner, is what bounds it.
   const cliPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'cli', 'index.js');
+  // How spawned agents invoke the orca CLI. In a global install the `orca` command is on PATH, so set
+  // ORCA_CLI=orca (the systemd unit does); a source checkout leaves it unset and falls back to running
+  // this daemon's own CLI by absolute path via node. Single source — threaded to spawn/pilot/overseer.
+  const cli = process.env.ORCA_CLI ?? `node ${cliPath}`;
   // Reuse the existing agent token across restarts so a daemon restart doesn't 401 in-flight agents
   // mid-task (they hold the token they were spawned with); only mints fresh when none is valid.
   const serviceToken = users.count() > 0 ? users.ensureAgentToken(users.list()[0]!.id) : '';
-  const orcaCli = { cliPath, url: `http://localhost:${process.env.ORCA_PORT ?? 4400}`, token: serviceToken };
+  const orcaCli = { cli, url: `http://localhost:${process.env.ORCA_PORT ?? 4400}`, token: serviceToken };
   const spawn = new SpawnService({ tmux, agents, orca: orcaCli, providers: (program) => config.get().providers[program] });
   const bus = new EventBus();
   const events = new EventStore(db);
@@ -122,8 +126,8 @@ export function buildApp(opts: BuildOpts) {
   // the Overseer parks a per-mission agent that long-polls the decision queue.
   const planJobs = new PlanJobStore();
   const decisionQueue = new DecisionQueue();
-  const pilot = makePilot({ spawn, config, projects, planJobs, tmux, nameAgent: uniqueName, cliPath });
-  const overseer = makeOverseer({ spawn, tmux, config, queue: decisionQueue, cliPath });
+  const pilot = makePilot({ spawn, config, projects, planJobs, tmux, nameAgent: uniqueName, cli });
+  const overseer = makeOverseer({ spawn, tmux, config, queue: decisionQueue, cli });
 
   const engine = new MissionEngine({
     tasks, readiness, missions, spawn, tmux, bus, projects,

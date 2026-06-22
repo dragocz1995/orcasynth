@@ -23,8 +23,8 @@ export interface SpawnCtx {
   /** When set, used verbatim as the agent prompt instead of the assembled worker preamble. Used by
    *  reasoning agents (Pilot/Overseer) that own their own instructions and close nothing. */
   rawPrompt?: string;
-  /** How the agent invokes the orca CLI for read-only verbs (e.g. `orca ls`) — `node <cliPath>` in
-   *  practice, so it never depends on `orca` being on PATH. Falls back to bare `orca`. */
+  /** How the agent invokes the orca CLI for read-only verbs (e.g. `orca ls`) — the global `orca`
+   *  command in production, or `node <dist/cli/index.js>` in a source checkout. Defaults to `orca`. */
   cli?: string;
 }
 

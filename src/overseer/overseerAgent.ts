@@ -7,10 +7,9 @@ import { resolveExecutor } from './routing.js';
 
 /** The parked overseer's loop prompt: poll for a decision, judge it, answer, repeat. It reasons but
  *  never edits the repo — its only side effects are the two orca CLI verbs. */
-export function overseerPrompt(missionId: string, cliPath?: string): string {
-  // Invoke the daemon's OWN CLI by absolute path via node (like the worker close command). A bare
-  // `orca` would 127 (`command not found`) — the binary isn't on the agent's PATH.
-  const cli = cliPath ? `node ${cliPath}` : 'orca';
+export function overseerPrompt(missionId: string, cli: string = 'orca'): string {
+  // `cli` is the resolved orca invocation (the global `orca` command in production, or
+  // `node <path-to-dist/cli/index.js>` in a source checkout) — see bootstrap's ORCA_CLI handling.
   return render('overseer', { missionId, cli });
 }
 
@@ -26,7 +25,7 @@ export interface OverseerController {
 /** Lifecycle of the parked per-mission overseer agent. When `overseerExec` is empty the controller
  *  is inert (the relay fallback in bootstrap handles decisions inline). The agent is parked: it
  *  long-polls and sits idle (0 tokens) until the engine/deriver enqueue a decision. */
-export function makeOverseer(deps: { spawn: SpawnService; tmux: TmuxDriver; config: ConfigStore; queue: DecisionQueue; cliPath?: string }): OverseerController {
+export function makeOverseer(deps: { spawn: SpawnService; tmux: TmuxDriver; config: ConfigStore; queue: DecisionQueue; cli?: string }): OverseerController {
   // Single source for the launch — both start (always) and ensure (only when dead) go through it.
   const park = async (missionId: string, projectId: number, projectPath: string): Promise<void> => {
     const exec = deps.config.get().autopilot.overseerExec;
@@ -34,7 +33,7 @@ export function makeOverseer(deps: { spawn: SpawnService; tmux: TmuxDriver; conf
     const spec = resolveExecutor([`exec:${exec}`], { program: 'claude-code', model: 'sonnet' });
     await deps.spawn.launch({
       projectId, projectPath, taskId: `overseer-${missionId}`, agentName: `overseer-${missionId}`, spec,
-      rawPrompt: overseerPrompt(missionId, deps.cliPath), extraEnv: { ORCA_MISSION: missionId },
+      rawPrompt: overseerPrompt(missionId, deps.cli), extraEnv: { ORCA_MISSION: missionId },
     });
   };
   return {

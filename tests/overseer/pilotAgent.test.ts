@@ -14,10 +14,10 @@ describe('pilotPrompt', () => {
     const p = pilotPrompt('add CSV export', 'pj-9', 'use the Tasks table');
     expect(p).not.toContain('{{');
   });
-  it('invokes the daemon CLI by absolute path via node when a cliPath is given (no bare `orca`)', () => {
-    const p = pilotPrompt('g', 'pj-9', undefined, '/var/www/orca/dist/cli/index.js');
+  it('uses the provided cli invocation verbatim (e.g. node <path> in a checkout)', () => {
+    const p = pilotPrompt('g', 'pj-9', undefined, 'node /var/www/orca/dist/cli/index.js');
     expect(p).toContain('node /var/www/orca/dist/cli/index.js plan submit');
-    expect(p).not.toMatch(/(^|\n)\s*orca plan submit/); // never the bare, PATH-dependent form
+    expect(p).not.toMatch(/(^|\n)\s*orca plan submit/); // not the bare default when an explicit cli is given
   });
   it('passes the phases JSON via a quoted heredoc so apostrophes cannot break the shell (O24)', () => {
     const p = pilotPrompt('g', 'pj-9');
@@ -40,7 +40,7 @@ describe('makePilot', () => {
       planJobs: { setSession: vi.fn() } as never,
       tmux: { list: async () => [] } as never,
       nameAgent: () => 'pilotX',
-      cliPath: '/d/cli/index.js',
+      cli: 'node /d/cli/index.js',
     });
     await pilot({ id: 'pj-9', goal: 'g', projectId: 1, epicId: null, dryRun: false, status: 'planning', phases: [] }, '/repo');
     expect(launch).toHaveBeenCalledTimes(1);
