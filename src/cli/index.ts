@@ -85,7 +85,7 @@ export async function run(argv: string[], c: OrcaClient, env: NodeJS.ProcessEnv)
       }
       console.error('usage: orca overseer <poll|decide ...>'); process.exit(1); break;
     }
-    default: console.error('usage: orca [menu] | <up|down|status|update> | <ls|ready|sessions|close|plan submit|overseer poll|overseer decide>'); process.exit(1);
+    default: console.error('usage: orca [menu] | install | <up|down|status|update> | <ls|ready|sessions|close|plan submit|overseer poll|overseer decide>'); process.exit(1);
   }
 }
 
@@ -95,6 +95,9 @@ async function main() {
   // Bare `orca` in a terminal opens the interactive launcher menu. Piped/non-TTY falls through to the
   // usage error from `run`, so scripts still get deterministic behavior.
   if (argv.length === 0 && process.stdin.isTTY) { await menu(process.env, version); return; }
+  // `orca install` is the root provisioning wizard — it sets up systemd, the proxy and the admin
+  // itself, so it must run BEFORE ensureDaemon (no auto-spawn) and before the lifecycle commands.
+  if (argv[0] === 'install') { const { install } = await import('./install/index.js'); await install(); return; }
   // Install-lifecycle commands manage the daemon/web themselves — handle them BEFORE ensureDaemon so
   // they don't trigger the API-CLI's auto-spawn.
   if (await runLifecycle(argv[0], process.env, defaultLifecycleDeps(version))) return;

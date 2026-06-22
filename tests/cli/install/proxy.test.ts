@@ -1,0 +1,53 @@
+import { describe, it, expect } from 'vitest';
+import { detectProxy, nginxVhost, apacheVhost, certbotCommand } from '../../../src/cli/install/proxy.js';
+import type { Runner } from '../../../src/cli/install/runner.js';
+
+function fakeRunner(present: string[]): Runner {
+  return {
+    which: async (cmd: string) => (present.includes(cmd) ? `/usr/sbin/${cmd}` : null),
+    exec: async () => ({ code: 0, stdout: '', stderr: '' }),
+    writeFile: async () => {},
+    exists: async () => false,
+  };
+}
+
+describe('install/proxy.detectProxy', () => {
+  it('prefers nginx when present', async () => {
+    expect(await detectProxy(fakeRunner(['nginx']))).toBe('nginx');
+  });
+  it('detects apache (apache2)', async () => {
+    expect(await detectProxy(fakeRunner(['apache2']))).toBe('apache');
+  });
+  it('returns null when neither is installed', async () => {
+    expect(await detectProxy(fakeRunner([]))).toBeNull();
+  });
+});
+
+describe('install/proxy vhost renderers', () => {
+  it('nginx vhost proxies the domain to the web port and disables buffering for SSE', () => {
+    const v = nginxVhost('orca.example.com', 4500);
+    expect(v).toContain('server_name orca.example.com;');
+    expect(v).toContain('proxy_pass http://127.0.0.1:4500;');
+    expect(v).toMatch(/proxy_buffering off;/);
+    expect(v).toMatch(/listen 80;/);
+  });
+  it('apache vhost reverse-proxies with preserved host', () => {
+    const v = apacheVhost('orca.example.com', 4500);
+    expect(v).toContain('ServerName orca.example.com');
+    expect(v).toContain('ProxyPass / http://127.0.0.1:4500/');
+    expect(v).toContain('ProxyPreserveHost On');
+  });
+});
+
+describe('install/proxy.certbotCommand', () => {
+  it('uses the nginx plugin with redirect and a registered email', () => {
+    const { cmd, args } = certbotCommand('nginx', 'orca.example.com', 'me@x.com');
+    expect(cmd).toBe('certbot');
+    expect(args).toEqual(expect.arrayContaining(['--nginx', '-d', 'orca.example.com', '--redirect', '-m', 'me@x.com', '--agree-tos', '--non-interactive']));
+  });
+  it('falls back to no-email registration when none is given', () => {
+    const { args } = certbotCommand('apache', 'orca.example.com');
+    expect(args).toContain('--apache');
+    expect(args).toContain('--register-unsafely-without-email');
+  });
+});
