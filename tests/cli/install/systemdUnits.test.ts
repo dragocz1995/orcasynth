@@ -5,7 +5,7 @@ const p: UnitParams = {
   user: 'orca', home: '/var/lib/orca', nodePath: '/usr/bin/node',
   daemonEntry: '/g/lib/node_modules/orcasynth/dist/daemon/index.js',
   webServer: '/g/lib/node_modules/orcasynth/web-dist/server.js',
-  npmGlobalBin: '/g/bin', daemonPort: 4400, webPort: 4500,
+  npmGlobalBin: '/g/bin', daemonPort: 4400, webPort: 4500, webHost: '127.0.0.1',
 };
 
 describe('install/systemdUnits.daemonUnit', () => {
@@ -36,5 +36,9 @@ describe('install/systemdUnits.webUnit', () => {
   it('runs the standalone server as the service user', () => {
     expect(u).toContain('ExecStart=/usr/bin/node /g/lib/node_modules/orcasynth/web-dist/server.js');
     expect(u).toMatch(/^User=orca$/m);
+  });
+  it('binds the configured web host (127.0.0.1 behind a proxy)', () => expect(u).toMatch(/^Environment=HOSTNAME=127\.0\.0\.1$/m));
+  it('can bind 0.0.0.0 for the proxy-less direct-port mode', () => {
+    expect(webUnit({ ...p, webHost: '0.0.0.0' })).toMatch(/^Environment=HOSTNAME=0\.0\.0\.0$/m);
   });
 });

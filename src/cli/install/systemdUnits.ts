@@ -16,6 +16,9 @@ export interface UnitParams {
   npmGlobalBin: string;
   daemonPort: number;
   webPort: number;
+  /** Interface the web server binds. `127.0.0.1` when a reverse proxy fronts it; `0.0.0.0` for the
+   *  proxy-less "direct port" mode where the browser hits http://<host>:<webPort> straight. */
+  webHost: string;
 }
 
 const BASE_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
@@ -53,7 +56,7 @@ Wants=orca-daemon.service
 Type=simple
 User=${p.user}
 Environment=PORT=${p.webPort}
-Environment=HOSTNAME=127.0.0.1
+Environment=HOSTNAME=${p.webHost}
 Environment=ORCA_DAEMON_URL=http://127.0.0.1:${p.daemonPort}
 Environment=ORCA_LOG_DIR=${p.home}/.config/orca/logs
 Environment=PATH=${p.npmGlobalBin}:${BASE_PATH}

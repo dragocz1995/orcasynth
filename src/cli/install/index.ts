@@ -9,9 +9,30 @@ import { daemonUnit, webUnit, type UnitParams } from './systemdUnits.js';
 import { detectProxy, nginxVhost, apacheVhost, certbotCommand, type ProxyKind } from './proxy.js';
 import { applySetup, buildSetupPlan, isFirstRun, type SetupAnswers } from '../setup.js';
 import { runSetupWizard } from '../setupWizard.js';
+import { INSTALL_INFO_PATH, serializeInstallInfo, type InstallInfo } from '../installInfo.js';
 
 const DAEMON_PORT = Number(process.env.ORCA_PORT ?? 4400);
 const WEB_PORT = Number(process.env.ORCA_WEB_PORT ?? 4500);
+
+/** How the web UI is reached. Drives the reverse proxy, the web's bind interface and the canonical URL.
+ *   - domain:    nginx/apache vhost + (optional) Let's Encrypt; web bound to 127.0.0.1.
+ *   - ip:        no reverse proxy — the web binds 0.0.0.0 and the browser hits http://<host>:<webPort>.
+ *   - localhost: no reverse proxy, web bound to 127.0.0.1, reachable only on the box. */
+type DeployMode = 'domain' | 'ip' | 'localhost';
+
+interface Deployment {
+  mode: DeployMode;
+  /** Host shown in the public URL: the domain, the server's public IP, or 'localhost'. */
+  host: string;
+  /** Domain to certify/proxy — set only in 'domain' mode. */
+  domain: string | null;
+  proxyPreference: ProxyKind;
+  /** Intended TLS (domain mode only); the effective result is returned by execute(). */
+  tls: boolean;
+  email: string | null;
+  /** Interface the web server binds: 0.0.0.0 for 'ip', 127.0.0.1 otherwise. */
+  webHost: string;
+}
 
 /** Everything `orca install` needs to provision a box, resolved either interactively (clack prompts)
  *  or non-interactively (CLI flags). Collecting it up front keeps the two front-ends thin and lets the
@@ -21,12 +42,19 @@ interface InstallPlan {
   installTmux: boolean;
   user: ServiceUserChoice;
   agents: string[];
-  domain: string | null;
-  proxyPreference: ProxyKind;
-  tls: boolean;
-  email: string | null;
+  deploy: Deployment;
   admin: SetupAnswers | null;
 }
+
+/** Canonical public URL for a deployment, given whether TLS actually came up. */
+function publicUrl(d: Deployment, tlsOk: boolean): string {
+  if (d.mode === 'domain') return `${tlsOk ? 'https' : 'http'}://${d.host}`;
+  if (d.mode === 'ip') return `http://${d.host}:${WEB_PORT}`;
+  return `http://localhost:${WEB_PORT}`;
+}
+
+const localhostDeploy = (): Deployment => ({ mode: 'localhost', host: 'localhost', domain: null, proxyPreference: 'nginx', tls: false, email: null, webHost: '127.0.0.1' });
+const ipDeploy = (host: string): Deployment => ({ mode: 'ip', host, domain: null, proxyPreference: 'nginx', tls: false, email: null, webHost: '0.0.0.0' });
 
 // ── package + npm path resolution ────────────────────────────────────────────
 
@@ -104,11 +132,11 @@ async function aptInstall(r: Runner, ...pkgs: string[]): Promise<void> {
 }
 
 /** Write + enable the two systemd units and verify they came active. */
-async function provisionSystemd(r: Runner, user: string, home: string): Promise<void> {
+async function provisionSystemd(r: Runner, user: string, home: string, webHost: string): Promise<void> {
   const { daemonEntry, webServer } = packagePaths();
   const params: UnitParams = {
     user, home, nodePath: process.execPath, daemonEntry, webServer,
-    npmGlobalBin: await npmGlobalBin(r), daemonPort: DAEMON_PORT, webPort: WEB_PORT,
+    npmGlobalBin: await npmGlobalBin(r), daemonPort: DAEMON_PORT, webPort: WEB_PORT, webHost,
   };
   // Ensure the data tree exists and is owned by the service user before first boot.
   await must(r, 'mkdir', ['-p', join(home, '.config', 'orca', 'logs')]);
@@ -178,28 +206,34 @@ async function execute(r: Runner, plan: InstallPlan): Promise<{ tls: boolean }> 
     await step(`Installing ${id}`, () => must(r, cmd, args));
   }
 
-  await step('Configuring systemd services', () => provisionSystemd(r, plan.user.username, home));
+  await step('Configuring systemd services', () => provisionSystemd(r, plan.user.username, home, plan.deploy.webHost));
 
   const ready = await step('Waiting for the daemon', () => waitForDaemon());
   if (!ready) throw new Error('daemon did not become reachable — check: journalctl -u orca-daemon');
 
+  const d = plan.deploy;
   let tlsOk = false;
-  if (plan.domain) {
+  if (d.mode === 'domain' && d.domain) {
     const kind = await step('Configuring reverse proxy', async () => {
-      const k = await resolveProxy(r, plan.proxyPreference);
-      await configureVhost(r, k, plan.domain!);
+      const k = await resolveProxy(r, d.proxyPreference);
+      await configureVhost(r, k, d.domain!);
       return k;
     });
     // TLS is the last, optional, most failure-prone step (DNS not pointed yet, rate limits, IPs). A
     // failure here must NOT abort the install — the site already serves over HTTP and the admin still
     // needs creating — so we warn and carry on rather than throwing.
-    if (plan.tls) {
-      try { await step('Requesting HTTPS certificate', () => obtainTls(r, kind, plan.domain!, plan.email)); tlsOk = true; }
+    if (d.tls) {
+      try { await step('Requesting HTTPS certificate', () => obtainTls(r, kind, d.domain!, d.email)); tlsOk = true; }
       catch (e) { p.log.warn(`HTTPS setup failed: ${(e as Error).message}\nThe site is up over HTTP — re-run certbot once the domain's DNS points here.`); }
     }
   }
 
   if (plan.admin) await step('Creating admin + verifying login', () => provisionAdmin(plan.admin!));
+
+  // Record the deployment so the launcher menu shows the right URL and drives systemd (not a 2nd daemon).
+  const info: InstallInfo = { publicUrl: publicUrl(d, tlsOk), mode: d.mode, serviceUser: plan.user.username, daemonPort: DAEMON_PORT, webPort: WEB_PORT };
+  await must(r, 'mkdir', ['-p', '/etc/orca']);
+  await r.writeFile(INSTALL_INFO_PATH, serializeInstallInfo(info));
   return { tls: tlsOk };
 }
 
@@ -229,7 +263,6 @@ async function planFromArgs(r: Runner, args: string[]): Promise<InstallPlan> {
     : agentsRaw === 'all' ? ['claude', 'opencode', 'codex']
     : agentsRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
-  const domain = flag(args, '--domain') ?? null;
   const adminUser = flag(args, '--admin-user');
   const adminPass = flag(args, '--admin-pass');
   const admin: SetupAnswers | null = adminUser && adminPass
@@ -240,13 +273,30 @@ async function planFromArgs(r: Runner, args: string[]): Promise<InstallPlan> {
     installTmux: !args.includes('--no-tmux'),
     user: { mode: exists ? 'existing' : 'create', username },
     agents,
-    domain,
-    proxyPreference: flag(args, '--proxy') === 'apache' ? 'apache' : 'nginx',
-    // No HTTPS for a bare IP — Let's Encrypt refuses it.
-    tls: domain !== null && !isIpAddress(domain) && !args.includes('--no-tls'),
-    email: flag(args, '--email') ?? null,
+    deploy: deploymentFromArgs(args),
     admin,
   };
+}
+
+/** Resolve the deployment from flags. `--host <ip>` (or `--ip`) ⇒ direct port mode; a real `--domain`
+ *  ⇒ domain+HTTPS; a `--domain` that is actually an IP is treated as direct port mode (Let's Encrypt
+ *  can't certify an IP); nothing ⇒ localhost. */
+function deploymentFromArgs(args: string[]): Deployment {
+  const host = flag(args, '--host');
+  const domain = flag(args, '--domain');
+  if (args.includes('--localhost')) return localhostDeploy();
+  if (host) return ipDeploy(host);
+  if (domain && isIpAddress(domain)) return ipDeploy(domain);
+  if (domain) {
+    return {
+      mode: 'domain', host: domain, domain,
+      proxyPreference: flag(args, '--proxy') === 'apache' ? 'apache' : 'nginx',
+      tls: !args.includes('--no-tls'),
+      email: flag(args, '--email') ?? null,
+      webHost: '127.0.0.1',
+    };
+  }
+  return localhostDeploy();
 }
 
 // ── interactive front-end ────────────────────────────────────────────────────
@@ -285,13 +335,43 @@ async function chooseAgents(r: Runner, user: string): Promise<string[]> {
   return pick as string[];
 }
 
-async function chooseProxy(r: Runner): Promise<{ domain: string | null; proxyPreference: ProxyKind; tls: boolean; email: string | null }> {
-  const domain = await p.text({
-    message: 'Domain for the web UI (blank to skip the reverse proxy and serve on localhost only)',
-    placeholder: 'orca.example.com',
+/** Best-effort public IPv4 of this box, used as the default for the direct-port mode. Prefers the
+ *  first global address from `hostname -I`; empty string when none can be determined. */
+async function detectPublicIp(r: Runner): Promise<string> {
+  const res = await r.exec('hostname', ['-I']);
+  const first = res.stdout.trim().split(/\s+/).find((ip) => /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) && !ip.startsWith('127.'));
+  return first ?? '';
+}
+
+async function chooseDeployment(r: Runner): Promise<Deployment> {
+  const mode = await p.select({
+    message: 'How will you reach the ORCA web UI?',
+    options: [
+      { value: 'domain', label: 'A domain name', hint: 'nginx + free HTTPS (Let’s Encrypt)' },
+      { value: 'ip', label: 'This server’s IP, on a port', hint: `http://<ip>:${WEB_PORT} — no reverse proxy` },
+      { value: 'localhost', label: 'Localhost only', hint: `http://localhost:${WEB_PORT}` },
+    ],
   });
+  bail(mode);
+
+  if (mode === 'localhost') return localhostDeploy();
+
+  if (mode === 'ip') {
+    const guess = await detectPublicIp(r);
+    const host = await p.text({ message: 'Public IP / hostname to advertise', initialValue: guess, validate: (v) => ((v ?? '').trim() ? undefined : 'Required') });
+    bail(host);
+    p.log.info(`The web UI will listen on 0.0.0.0:${WEB_PORT} — make sure port ${WEB_PORT} is open in any firewall.`);
+    return ipDeploy(host.trim());
+  }
+
+  // domain
+  const domain = await p.text({ message: 'Domain name', placeholder: 'orca.example.com', validate: (v) => {
+    const t = (v ?? '').trim();
+    if (!t) return 'Required';
+    if (isIpAddress(t)) return 'That’s an IP — pick the IP option instead (Let’s Encrypt needs a domain name)';
+    return undefined;
+  } });
   bail(domain);
-  if (!domain.trim()) return { domain: null, proxyPreference: 'nginx', tls: false, email: null };
 
   let proxyPreference: ProxyKind = 'nginx';
   if (!(await detectProxy(r))) {
@@ -303,17 +383,11 @@ async function chooseProxy(r: Runner): Promise<{ domain: string | null; proxyPre
     proxyPreference = which as ProxyKind;
   }
 
-  // Let's Encrypt can't certify a bare IP, so don't even offer HTTPS for one — serve over HTTP.
-  if (isIpAddress(domain.trim())) {
-    p.log.info(`${domain.trim()} is an IP address — serving the UI over HTTP (Let's Encrypt requires a domain name).`);
-    return { domain: domain.trim(), proxyPreference, tls: false, email: null };
-  }
-
   const wantTls = await p.confirm({ message: `Obtain a free HTTPS certificate for ${domain.trim()} via Let's Encrypt?` });
-  if (p.isCancel(wantTls) || !wantTls) return { domain: domain.trim(), proxyPreference, tls: false, email: null };
+  if (p.isCancel(wantTls) || !wantTls) return { mode: 'domain', host: domain.trim(), domain: domain.trim(), proxyPreference, tls: false, email: null, webHost: '127.0.0.1' };
   const email = await p.text({ message: 'Email for renewal notices (blank to register without email)', placeholder: 'you@example.com' });
   bail(email);
-  return { domain: domain.trim(), proxyPreference, tls: true, email: email.trim() || null };
+  return { mode: 'domain', host: domain.trim(), domain: domain.trim(), proxyPreference, tls: true, email: email.trim() || null, webHost: '127.0.0.1' };
 }
 
 // ── entry point ──────────────────────────────────────────────────────────────
@@ -321,9 +395,12 @@ async function chooseProxy(r: Runner): Promise<{ domain: string | null; proxyPre
 /** Human recap of what the wizard is about to do — shown for confirmation before anything is touched. */
 function planSummary(plan: InstallPlan): string {
   const pad = (s: string) => s.padEnd(9);
-  const web = plan.domain
-    ? `${plan.proxyPreference} → ${plan.domain}${plan.tls ? ' + HTTPS (Let’s Encrypt)' : ' (HTTP only)'}`
-    : `localhost only — http://127.0.0.1:${WEB_PORT} (no reverse proxy)`;
+  const d = plan.deploy;
+  const web = d.mode === 'domain'
+    ? `${d.proxyPreference} → ${d.domain}${d.tls ? ' + HTTPS (Let’s Encrypt)' : ' (HTTP only)'}`
+    : d.mode === 'ip'
+      ? `http://${d.host}:${WEB_PORT} — direct, no reverse proxy`
+      : `localhost only — http://localhost:${WEB_PORT}`;
   return [
     `${pad('User')}${plan.user.mode === 'create' ? `create system user "${plan.user.username}"` : `existing user "${plan.user.username}"`}`,
     `${pad('Agents')}${plan.agents.length ? plan.agents.join(', ') : 'none (install later)'}`,
@@ -357,9 +434,9 @@ export async function install(args: string[] = []): Promise<void> {
     }
     const user = await chooseServiceUser();
     const agents = await chooseAgents(r, user.username);
-    const proxy = await chooseProxy(r);
+    const deploy = await chooseDeployment(r);
     // Admin is created via the shared wizard AFTER the daemon is up, so collect it there instead.
-    plan = { installTmux, user, agents, ...proxy, admin: null };
+    plan = { installTmux, user, agents, deploy, admin: null };
   }
 
   // Recap everything before touching the system — last chance to back out.
@@ -379,7 +456,7 @@ export async function install(args: string[] = []): Promise<void> {
     if (creds) { adminUser = creds.username; await step('Verifying login', () => loginSmokeTest(creds.username, creds.password)); }
   }
 
-  const url = plan.domain ? (tls ? `https://${plan.domain}` : `http://${plan.domain}`) : `http://127.0.0.1:${WEB_PORT}`;
+  const url = publicUrl(plan.deploy, tls);
   const summary = [
     `Open       ${url}`,
     adminUser ? `Sign in    ${adminUser}` : 'Sign in    create an admin in the web UI',
