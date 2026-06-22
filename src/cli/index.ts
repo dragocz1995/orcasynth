@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { OrcaClient } from './client.js';
@@ -103,7 +103,16 @@ async function main() {
   await run(argv, c, process.env);
 }
 
-// Run only when invoked as the binary, not when imported (e.g. by tests).
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main().catch(e => { console.error(e.message); process.exit(1); });
+// Run only when invoked as the binary, not when imported (e.g. by tests). A global npm install exposes
+// `orca` as a SYMLINK in the bin dir, so process.argv[1] is the symlink path while import.meta.url is
+// the real module path — a plain string compare never matches and main() would silently never run.
+// realpathSync resolves the symlink so the comparison holds for both `node dist/cli/index.js` and the
+// installed `orca` command.
+const invoked = process.argv[1];
+if (invoked) {
+  let entry = invoked;
+  try { entry = realpathSync(invoked); } catch { /* argv[1] not a real path — fall back to the raw value */ }
+  if (entry === fileURLToPath(import.meta.url)) {
+    main().catch(e => { console.error(e.message); process.exit(1); });
+  }
 }
