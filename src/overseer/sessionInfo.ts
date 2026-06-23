@@ -1,7 +1,7 @@
 /** Structured identity of a live agent tmux session, derived from the daemon's own naming
  *  convention. The daemon owns how it names sessions, so classifying them here keeps the role a
  *  first-class fact the API exposes — clients never reverse-engineer meaning from the raw name. */
-type SessionRole = 'overseer' | 'pilot' | 'agent';
+type SessionRole = 'overseer' | 'pilot' | 'agent' | 'advisor';
 
 export interface SessionInfo {
   /** The tmux session id (`orca-…`) — the stable handle for all session operations. */
@@ -11,6 +11,8 @@ export interface SessionInfo {
   agent: string;
   /** The mission this overseer governs (role `overseer` only). */
   missionId?: string;
+  /** The owning user (role `advisor` only) — `orca-advisor-<userId>`. */
+  userId?: number;
   /** The project this session runs in. Not derivable from the name — the `/sessions` route fills it
    *  from the agent store (which records every spawned agent's project), left undefined here. */
   projectId?: number;
@@ -19,12 +21,18 @@ export interface SessionInfo {
 const ORCA = 'orca-';
 const OVERSEER = 'overseer-';
 const PILOT = 'pilot-';
+const ADVISOR = 'advisor-';
 
 /** Classify a live session name into its role + identity. Mirrors the spawn-time conventions:
- *  overseer → `orca-overseer-<missionId>`, pilot → `orca-pilot-<name>`, worker → `orca-<name>`. */
+ *  overseer → `orca-overseer-<missionId>`, pilot → `orca-pilot-<name>`, advisor → `orca-advisor-<userId>`,
+ *  worker → `orca-<name>`. */
 export function classifySession(name: string): SessionInfo {
   const bare = name.startsWith(ORCA) ? name.slice(ORCA.length) : name;
   if (bare.startsWith(OVERSEER)) return { name, role: 'overseer', agent: '', missionId: bare.slice(OVERSEER.length) };
   if (bare.startsWith(PILOT)) return { name, role: 'pilot', agent: bare.slice(PILOT.length) };
+  if (bare.startsWith(ADVISOR)) {
+    const userId = Number(bare.slice(ADVISOR.length));
+    return { name, role: 'advisor', agent: '', userId: Number.isInteger(userId) ? userId : undefined };
+  }
   return { name, role: 'agent', agent: bare };
 }

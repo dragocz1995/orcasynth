@@ -2,10 +2,10 @@ export type TaskStatus = 'open' | 'in_progress' | 'blocked' | 'closed' | 'cancel
 /** Outcome the daemon records when a task closes (`src/store/types.ts`). */
 type TaskOutcome = 'ok' | 'fail';
 export interface Task { id: string; title: string; status: TaskStatus; type?: string; priority?: string; labels?: string[]; description?: string; scheduled_at?: string | null; autostart?: number; result_summary?: string | null; outcome?: TaskOutcome | null; closed_at?: string | null; created_at?: string; parent_id?: string | null; project_id?: number }
-type SessionRole = 'overseer' | 'pilot' | 'agent';
+type SessionRole = 'overseer' | 'pilot' | 'agent' | 'advisor';
 /** Structured identity of a live agent session, classified by the daemon (single source of truth).
  *  Clients render from `role` — they never parse meaning out of the raw session name. */
-export interface SessionInfo { name: string; role: SessionRole; agent: string; missionId?: string; projectId?: number }
+export interface SessionInfo { name: string; role: SessionRole; agent: string; missionId?: string; projectId?: number; userId?: number }
 /** Autonomy level the overseer runs a mission at (`L0` manual … `L3` fully autonomous). */
 type Autonomy = 'L0' | 'L1' | 'L2' | 'L3';
 /** Lifecycle state of a mission, set by the daemon (`src/overseer/missionEngine.ts`). */

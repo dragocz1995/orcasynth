@@ -20,4 +20,12 @@ describe('classifySession', () => {
     // Only the exact `pilot-`/`overseer-` prefixes switch role; a normal name is always an agent.
     expect(classifySession('orca-Overlord').role).toBe('agent');
   });
+
+  it('classifies an advisor session and extracts its user id', () => {
+    expect(classifySession('orca-advisor-7')).toEqual({ name: 'orca-advisor-7', role: 'advisor', agent: '', userId: 7 });
+  });
+
+  it('leaves userId undefined for a malformed advisor name', () => {
+    expect(classifySession('orca-advisor-x').userId).toBeUndefined();
+  });
 });
