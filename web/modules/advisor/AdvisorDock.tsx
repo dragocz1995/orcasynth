@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Bot, X, Square, RotateCcw, MoreVertical } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
@@ -21,6 +21,37 @@ export function AdvisorDock() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // User-chosen panel size (px), persisted across sessions. null → the responsive default below.
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('advisor:size');
+      if (raw) { const s = JSON.parse(raw) as { w?: number; h?: number }; if (s.w && s.h) setSize({ w: s.w, h: s.h }); }
+    } catch { /* ignore malformed storage */ }
+  }, []);
+
+  // Drag the top-left corner to resize. The panel is anchored bottom-right, so dragging up/left grows
+  // it (dx/dy are inverted). Bounds keep it usable and on-screen; the final size is persisted.
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const panel = panelRef.current; if (!panel) return;
+    const startX = e.clientX, startY = e.clientY;
+    const startW = panel.offsetWidth, startH = panel.offsetHeight;
+    const onMove = (ev: PointerEvent) => {
+      const w = Math.min(Math.max(startW + (startX - ev.clientX), 360), window.innerWidth * 0.96);
+      const h = Math.min(Math.max(startH + (startY - ev.clientY), 320), window.innerHeight * 0.92);
+      setSize({ w, h });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setSize((s) => { if (s) { try { localStorage.setItem('advisor:size', JSON.stringify(s)); } catch { /* ignore */ } } return s; });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
   const status = useAdvisorStatus();
   const config = useConfig();
   const me = useMe();
@@ -65,8 +96,20 @@ export function AdvisorDock() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex h-[min(620px,80vh)] w-[min(680px,92vw)] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+    <div
+      ref={panelRef}
+      className="fixed bottom-4 right-4 z-50 flex max-h-[92vh] max-w-[96vw] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+      style={size ? { width: size.w, height: size.h } : { width: 'min(680px, 92vw)', height: 'min(620px, 80vh)' }}
+    >
+      <div
+        onPointerDown={startResize}
+        title={t.advisor.resize}
+        aria-label={t.advisor.resize}
+        className="group/resize absolute left-0 top-0 z-20 flex h-6 w-6 cursor-nwse-resize items-start justify-start p-1.5"
+      >
+        <span className="h-2 w-2 rounded-tl-sm border-l-2 border-t-2 border-text-muted/40 transition-colors group-hover/resize:border-accent" aria-hidden />
+      </div>
+      <div className="flex items-center gap-2 border-b border-border py-2.5 pl-6 pr-4">
         <Bot size={16} className="text-accent" aria-hidden />
         <span className="text-sm font-semibold">{t.advisor.title}</span>
         <span className={`ml-1 inline-flex items-center gap-1 text-xs ${running ? 'text-green-500' : 'text-text-muted'}`}>

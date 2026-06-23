@@ -301,6 +301,7 @@ export const cs = {
     stopped: 'Poradce zastaven',
     noExecs: 'Nemáte povoleného žádného agenta. Požádejte správce o přidělení.',
     hint: 'Pište přímo do terminálu — všechny klávesy fungují.',
+    resize: 'Tažením změníte velikost',
   },
   sessions: {
     needsInput: 'vyžaduje vstup',

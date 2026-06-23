@@ -301,6 +301,7 @@ export const en = {
     stopped: 'Advisor stopped',
     noExecs: 'You have no agent enabled. Ask an admin to allow one for you.',
     hint: 'Type directly into the terminal — all keys work.',
+    resize: 'Drag to resize',
   },
   sessions: {
     needsInput: 'needs input',
