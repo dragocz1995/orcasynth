@@ -161,8 +161,8 @@ Admin-only (non-admins see a lock screen with link to My Account). Inline in `ap
     - **L1**: "The Pilot runs only clear, safe steps on its own. Anything uncertain or sensitive waits for your approval."
     - **L2**: "The Pilot runs work and clears agent permission prompts itself. Ambiguous or risky situations are escalated to you."
     - **L3**: "Full autonomy. The Pilot runs and clears everything itself, reaching out only when it genuinely cannot decide."
-- **Hermes** — one-click plugin install for same-host Hermes integration
-  - Hermes home, orca URL and token, plugin status indicator
+- **Hermes** — one-click MCP-server registration for same-host Hermes integration
+  - Hermes home, orca URL and token, MCP-server status indicator
 
 ### Users `/users`
 
@@ -192,7 +192,7 @@ First-run wizard (`app/onboarding/page.tsx`). Redirected from `/` when `freshIns
 - **Provider binaries** — binary paths and extra args per provider
 - **Autopilot backend** — Relay (API key + URL) or CLI Agents (pilot/overseer exec picker)
 - **Users** — user list and create-first-user form
-- **Hermes** — optional orca plugin install
+- **Hermes** — optional orca MCP-server registration
 
 Root `/` checks `cli-status` and redirects to `/onboarding` (fresh install) or `/dash`.
 

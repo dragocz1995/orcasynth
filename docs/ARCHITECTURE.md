@@ -124,7 +124,7 @@ Store modules: `db.ts`, `taskStore.ts`, `missionStore.ts`, `agentStore.ts`, `eve
 
 ### `src/integrations/` — External integrations
 
-- `hermesInstall.ts` — installs the bundled orca plugin into a same-host Hermes instance
+- `hermesInstall.ts` — registers orca as an MCP server in a same-host Hermes instance
 - `projectFiles.ts` — safe file tree, read, write, and diff operations for the Monaco editor
 - `cliDetection.ts` — detects installed agent CLIs (claude, opencode, codex) for the onboarding wizard
 - `usage/` — reads token/cost usage from each executor CLI's local session storage (portable, no relay)

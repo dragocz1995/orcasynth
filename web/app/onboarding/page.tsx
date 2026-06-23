@@ -166,7 +166,7 @@ export default function OnboardingPage() {
   const handleInstallHermes = () => {
     hermesInstall.mutate(
       { home: hHome.trim() || undefined, url: hUrl.trim(), token: hToken.trim() },
-      { onSuccess: () => toast(t.onboarding.pluginInstalled), onError: (e) => toast(String(e), 'error') },
+      { onSuccess: () => toast(t.onboarding.mcpConnected), onError: (e) => toast(String(e), 'error') },
     );
   };
 
@@ -399,7 +399,7 @@ export default function OnboardingPage() {
               <p className="mb-4 text-xs text-text-muted">{t.onboarding.hermesDesc}</p>
 
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t.onboarding.pluginStatus}</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-text-muted">{t.onboarding.mcpStatus}</span>
                 {hermesStatus.isLoading ? (
                   <Badge tone="muted">{t.common.loading}</Badge>
                 ) : hermesStatus.isError ? (
@@ -430,7 +430,7 @@ export default function OnboardingPage() {
 
               <div className="mt-4 flex flex-col gap-3">
                 <Button variant="accent" className="self-start" disabled={hermesInstall.isPending || !hUrl.trim() || !hToken.trim()} onClick={handleInstallHermes}>
-                  {hermesInstall.isPending ? t.onboarding.installing : t.onboarding.installPlugin}
+                  {hermesInstall.isPending ? t.onboarding.installing : t.onboarding.connectMcp}
                 </Button>
                 <p className="text-xs text-text-muted">{t.onboarding.restartNote}</p>
               </div>

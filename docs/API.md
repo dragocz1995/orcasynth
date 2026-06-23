@@ -1893,13 +1893,13 @@ is present on `done`.
 
 ## Integrations
 
-### Hermes plugin status
+### Hermes MCP status
 
 ```http
 GET /integrations/hermes/status?home=~/.hermes
 ```
 
-Reports whether the Orca plugin is installed and enabled in a same-host Hermes instance.
+Reports whether Orca is registered as an MCP server (and enabled) in a same-host Hermes instance.
 `home` override is constrained to live under the daemon's configured Hermes root
 (`HERMES_HOME` env, default `~/.hermes`). Admin-only in multi-user mode.
 
@@ -1908,8 +1908,7 @@ Reports whether the Orca plugin is installed and enabled in a same-host Hermes i
 {
   "home": "~/.hermes",
   "exists": true,
-  "pluginsDir": true,
-  "pluginInstalled": true,
+  "registered": true,
   "enabled": true
 }
 ```
@@ -1924,7 +1923,7 @@ Reports whether the Orca plugin is installed and enabled in a same-host Hermes i
 { "error": "forbidden" }
 ```
 
-### Install Hermes plugin
+### Register Orca MCP in Hermes
 
 ```http
 POST /integrations/hermes/install
@@ -1933,24 +1932,23 @@ Content-Type: application/json
 {
   "home": "~/.hermes",
   "url": "http://localhost:4400",
-  "token": "a1b2c3d4...",
-  "timeout": 5000
+  "token": "a1b2c3d4..."
 }
 ```
 
-Copies the bundled `hermes-plugin/orca/` into the Hermes plugins directory, writes per-instance
-config (url + token), and enables the plugin in Hermes's `config.yaml`. Backs up the config first.
-Admin-only (writes credentials into a host path).
+Writes the Orca bearer token into Hermes's `.env` (as `MCP_ORCA_API_KEY`) and adds an `orca` entry
+under `mcp_servers:` in its `config.yaml` (pointing at `<url>/mcp` with a bearer auth header). Backs
+up the config first. Admin-only (writes credentials into a host path).
 
 **Response `201`**
 ```json
 {
-  "pluginDir": "~/.hermes/plugins/orca",
-  "copied": true,
-  "alreadyEnabled": false,
+  "mcpUrl": "http://localhost:4400/mcp",
+  "registered": true,
   "enabled": true,
+  "envWritten": true,
   "backedUp": true,
-  "status": { "home": "~/.hermes", "pluginInstalled": true, "enabled": true }
+  "status": { "home": "~/.hermes", "exists": true, "registered": true, "enabled": true }
 }
 ```
 

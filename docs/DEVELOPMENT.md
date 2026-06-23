@@ -146,7 +146,7 @@ src/
 │   ├── client.ts     RelayClient + FakeInference
 │   └── types.ts      Inference types
 ├── integrations/     External integrations
-│   ├── hermesInstall.ts  Hermes plugin installer
+│   ├── hermesInstall.ts  Hermes MCP-server registration
 │   ├── projectFiles.ts   File tree, read/write/diff for Monaco editor
 │   ├── cliDetection.ts   CLI detection for onboarding
 │   └── usage/            Token/cost reader per executor CLI
