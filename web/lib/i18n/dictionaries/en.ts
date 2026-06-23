@@ -52,7 +52,6 @@ export const en = {
     success: 'Success',
     error: 'Error',
     send: 'Send',
-    command: 'command…',
     kill: 'Kill',
     sendKeys: 'send keys…',
     appName: 'Orca',
@@ -330,6 +329,7 @@ export const en = {
     sentTo: 'Sent to {name}',
     interrupted: 'Interrupted {name}',
     killed: 'Killed {name}',
+    typeHint: 'Type directly into the terminal — all keys work.',
     selectLabel: 'Select {id}',
   },
   kanban: {

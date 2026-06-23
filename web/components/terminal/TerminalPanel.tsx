@@ -1,32 +1,37 @@
 'use client';
 import { Terminal } from './Terminal';
-import { TerminalControls } from './TerminalControls';
-import { useSendInput, useKillSession } from '../../lib/mutations';
+import { Button } from '../ui/Button';
+import { useKillSession } from '../../lib/mutations';
 import { useToast } from '../ui/Toast';
 import { useTranslation } from '../../lib/i18n';
 
+/** The full agent terminal: a single interactive xterm the user types directly into (all keys work),
+ *  plus a slim footer carrying only the Kill action. There is no separate input box or key-button bar
+ *  any more — keystrokes flow straight to the pane via xterm `onData`. */
 export function TerminalPanel({ name, onKilled }: { name: string; onKilled?: () => void }) {
-  const send = useSendInput();
   const kill = useKillSession();
   const { toast } = useToast();
   const { t } = useTranslation();
   return (
     <div className="flex h-full w-full flex-col">
       <div className="min-h-0 flex-1">
-        <Terminal name={name} />
+        <Terminal name={name} interactive />
       </div>
-      <TerminalControls
-        busy={kill.isPending}
-        onSendKeys={(keys) =>
-          send.mutate({ name, keys }, { onError: (e) => toast(String(e), 'error') })
-        }
-        onKill={() =>
-          kill.mutate(name, {
-            onSuccess: () => { toast(t.sessions.killed.replace('{name}', name)); onKilled?.(); },
-            onError: (e) => toast(String(e), 'error'),
-          })
-        }
-      />
+      <div className="flex items-center gap-2 border-t border-border bg-surface px-3 py-2">
+        <span className="text-xs text-text-muted">{t.sessions.typeHint}</span>
+        <div className="ml-auto">
+          <Button
+            variant="danger"
+            disabled={kill.isPending}
+            onClick={() => kill.mutate(name, {
+              onSuccess: () => { toast(t.sessions.killed.replace('{name}', name)); onKilled?.(); },
+              onError: (e) => toast(String(e), 'error'),
+            })}
+          >
+            {t.common.kill}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

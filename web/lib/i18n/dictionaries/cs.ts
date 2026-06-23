@@ -52,7 +52,6 @@ export const cs = {
     success: 'Úspěch',
     error: 'Chyba',
     send: 'Odeslat',
-    command: 'příkaz…',
     kill: 'Ukončit',
     sendKeys: 'odeslat klávesy…',
     appName: 'Orca',
@@ -330,6 +329,7 @@ export const cs = {
     sentTo: 'Odesláno {name}',
     interrupted: 'Přerušeno {name}',
     killed: 'Ukončeno {name}',
+    typeHint: 'Pište přímo do terminálu — všechny klávesy fungují.',
     selectLabel: 'Vybrat {id}',
   },
   kanban: {

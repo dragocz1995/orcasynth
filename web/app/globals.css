@@ -75,9 +75,6 @@ body { overflow: hidden; overscroll-behavior: none; }
    block for the fixed-position modals/overlays rendered inside the page. */
 @keyframes route-fade { from { opacity: 0; } to { opacity: 1; } }
 .animate-route { animation: route-fade 200ms var(--ease-out) both; }
-/* SVG edge that draws itself in on mount (normalized via pathLength="1") */
-@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-.animate-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 600ms var(--ease-out) forwards; }
 .skeleton { background: var(--color-elevated); border-radius: var(--radius-sm); animation: skel-pulse 1.4s ease-in-out infinite; }
 .live-dot { position: relative; }
 .live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 9999px; animation: live-ring 2s ease-out infinite; }
@@ -95,8 +92,7 @@ body { overflow: hidden; overscroll-behavior: none; }
 .flow-active { animation: flow-pulse 1.8s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-up, .animate-pop-in, .animate-route, .skeleton, .live-dot::after, .animate-draw, .flow-edge, .flow-edge-h, .flow-active { animation: none !important; }
-  .animate-draw { stroke-dashoffset: 0; }
+  .animate-fade-up, .animate-pop-in, .animate-route, .skeleton, .live-dot::after, .flow-edge, .flow-edge-h, .flow-active { animation: none !important; }
   .card-interactive:hover { transform: none; }
 }
 
