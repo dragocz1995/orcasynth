@@ -51,6 +51,11 @@ describe('POST /missions/:id/pr', () => {
     expect((await openPr(app)).status).toBe(422);
   });
 
+  it('maps an unfinished mission (incomplete) to 409', async () => {
+    const app = build(async () => ({ state: 'incomplete' }));
+    expect((await openPr(app)).status).toBe(409);
+  });
+
   it('404s for an unknown mission', async () => {
     const app = build(async () => ({ state: 'off' }));
     expect((await openPr(app, 'm-nope')).status).toBe(404);

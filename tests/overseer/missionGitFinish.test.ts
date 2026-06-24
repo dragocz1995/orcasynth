@@ -86,11 +86,27 @@ describe('MissionGit.finishMission (Stage 4)', () => {
     await missionGit.commitPhase('m-epic', 'phase one');
 
     expect((await missionGit.finishMission('m-epic')).state).toBe('ready'); // auto-open off → waits
-    expect(prs.get('m-epic')!.pr_state).toBeNull();
+    expect(prs.get('m-epic')!.pr_state).toBe('ready'); // persisted so the "Open PR" affordance is gated on completion
 
     const res = await missionGit.openPr('m-epic'); // manual trigger
     expect(res).toEqual({ state: 'opened', url: 'https://github.com/o/r/pull/8', number: 8 });
     expect(prs.get('m-epic')!.pr_state).toBe('open');
+  });
+
+  it('refuses a manual openPr while the mission is mid-flight (not yet ready)', async () => {
+    // The regression: the "Open PR" affordance opened a partial PR after only the first phase. The
+    // manual open must refuse until finishMission has marked the mission 'ready' (all phases done +
+    // verified) — pr_state is still null here (just engaged, work in progress).
+    fakeGh(`echo "should-not-create" ; exit 9`);
+    const { missionGit, prs } = build({ prAutoOpen: false, verify: '' });
+    await missionGit.onEngage('m-epic', 'epic');
+    writeFileSync(join(prs.get('m-epic')!.worktree, 'a.txt'), 'phase one work\n');
+    await missionGit.commitPhase('m-epic', 'phase one');
+
+    const res = await missionGit.openPr('m-epic'); // user clicks "Open PR" before the mission finished
+    expect(res.state).toBe('incomplete');
+    expect(prs.get('m-epic')!.pr_state).toBeNull(); // unchanged — no PR opened
+    expect(git(remote, 'branch', '--list', 'orca/demo-epic').trim()).toBe(''); // nothing pushed
   });
 
   it('a project pr_enabled=false suppresses the PR worktree even when the global default is on', async () => {
@@ -98,6 +114,22 @@ describe('MissionGit.finishMission (Stage 4)', () => {
     projects.update(project.id, { pr_enabled: false }); // per-project override wins over the global default
     await missionGit.onEngage('m-epic', 'epic');
     expect(prs.get('m-epic')).toBeNull(); // PR mode off for this project → no worktree provisioned
+  });
+
+  it('an epic pr:off label suppresses the worktree even when project + global are on', async () => {
+    const { missionGit, prs, projects, project, tasks } = build({ prAutoOpen: true, verify: '' });
+    projects.update(project.id, { pr_enabled: true }); // project on, global on…
+    tasks.addLabel('epic', 'pr:off'); // …but this task opted out
+    await missionGit.onEngage('m-epic', 'epic');
+    expect(prs.get('m-epic')).toBeNull(); // per-task override wins → no PR worktree
+  });
+
+  it('an epic pr:on label forces the worktree even when the project override is off', async () => {
+    const { missionGit, prs, projects, project, tasks } = build({ prAutoOpen: false, verify: '' });
+    projects.update(project.id, { pr_enabled: false }); // project override would suppress it…
+    tasks.addLabel('epic', 'pr:on'); // …but this task opted in — the most-specific override wins
+    await missionGit.onEngage('m-epic', 'epic');
+    expect(prs.get('m-epic')).not.toBeNull(); // per-task override wins → PR worktree provisioned
   });
 
   it('mergePr squash-merges an open PR and records it merged + clears the budget', async () => {

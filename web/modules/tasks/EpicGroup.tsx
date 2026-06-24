@@ -139,7 +139,7 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
             >
               <GitPullRequest size={13} className="shrink-0" aria-hidden />#{pr.prNumber}
             </a>
-          ) : pr && pr.prState !== 'verify_failed' ? (
+          ) : pr?.prState === 'ready' ? (
             <ActionPill icon={GitPullRequest} label={t.missions.openPr} tone="accent" onClick={onOpenPr} disabled={openPr.isPending} />
           ) : null}
           {pr && pr.fixRounds > 0 && pr.prState === 'open' ? (

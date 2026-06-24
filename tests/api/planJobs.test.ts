@@ -34,6 +34,42 @@ describe('async plan jobs (relay path)', () => {
     expect(tasks.some((t) => t.title === 'Build')).toBe(true);
   });
 
+  it('de-duplicates agent names across phases so sessions can never collide', async () => {
+    // The pilot (an LLM) can hand the SAME agent name to several phases. Agent names double as tmux
+    // session names and as the janitor's session↔task key, so duplicates cause "duplicate session"
+    // spawn failures and stall the mission. persistPlan must keep the first and drop the rest.
+    const { app, token } = await makeTestApp({ apiKey: '' });
+    await app.request('/config', { method: 'PUT', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ autopilot: { pilotExec: 'claude:opus' } }) });
+    const { jobId } = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'agent plan' }) })).json() as { jobId: string };
+    await app.request(`/plan/${jobId}/submit`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ phases: [
+      { title: 'One', type: 'task', agent: 'claude' },
+      { title: 'Two', type: 'task', agent: 'claude' },
+      { title: 'Three', type: 'task', agent: 'claude' },
+    ] }) });
+    const tasks = await (await app.request('/tasks', { headers: { authorization: `Bearer ${token}` } })).json() as { title: string; labels: string[] }[];
+    const phases = tasks.filter((t) => ['One', 'Two', 'Three'].includes(t.title));
+    const agentNames = phases.map((t) => t.labels.find((l) => l.startsWith('agent:'))).filter(Boolean);
+    expect(new Set(agentNames).size).toBe(agentNames.length); // no two phases share an agent name
+    expect(agentNames).toContain('agent:claude'); // the first occurrence is honoured
+  });
+
+  it('stamps a pr:off epic label when the task opts out of the PR workflow', async () => {
+    const { app, token } = await makeTestApp({ fakePlan: '[{"title":"P","type":"task"}]', apiKey: 'k' });
+    const { epicId } = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'no PR please', prEnabled: false }) })).json() as { epicId: string };
+    const tasks = await (await app.request('/tasks', { headers: { authorization: `Bearer ${token}` } })).json() as { id: string; labels: string[] }[];
+    expect(tasks.find((t) => t.id === epicId)?.labels).toContain('pr:off');
+  });
+
+  it('stamps a pr:on epic label when the task opts in, and nothing when left to default', async () => {
+    const { app, token } = await makeTestApp({ fakePlan: '[{"title":"P","type":"task"}]', apiKey: 'k' });
+    const on = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'PR on', prEnabled: true }) })).json() as { epicId: string };
+    const def = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'PR default' }) })).json() as { epicId: string };
+    const tasks = await (await app.request('/tasks', { headers: { authorization: `Bearer ${token}` } })).json() as { id: string; labels: string[] }[];
+    expect(tasks.find((t) => t.id === on.epicId)?.labels).toContain('pr:on');
+    const defLabels = tasks.find((t) => t.id === def.epicId)?.labels ?? [];
+    expect(defLabels.some((l) => l.startsWith('pr:'))).toBe(false); // inherit → no override label
+  });
+
   it('tears down the Pilot tmux session once the plan job settles (no lingering planner)', async () => {
     const t = await makeTestApp({ apiKey: '' });
     // A pilot is planning: its session is live and recorded on the job.

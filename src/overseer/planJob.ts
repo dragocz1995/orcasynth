@@ -5,6 +5,9 @@ export type PlanJobStatus = 'planning' | 'done' | 'failed';
 export interface PlanJob {
   id: string; epicId: string | null; goal: string; projectId: number; exec?: string; autoModel?: boolean;
   dryRun: boolean; engage?: { autonomy: string; maxSessions: number };
+  /** Per-task GitHub PR-native override, stamped onto the epic as a `pr:on`/`pr:off` label so this
+   *  mission can opt in/out independently of the project/global default. Undefined/null = inherit. */
+  prEnabled?: boolean | null;
   status: PlanJobStatus; phases: Phase[]; error?: string;
   /** tmux session of the Pilot agent in agent-mode planning, so the client can live-preview the
    *  planner's pane while it works. Unset for relay-mode planning (synchronous, no tmux). */
@@ -26,7 +29,7 @@ export class PlanJobStore {
 
   constructor(private now: () => number = Date.now) {}
 
-  create(input: { goal: string; projectId: number; epicId: string | null; dryRun: boolean; exec?: string; autoModel?: boolean; engage?: { autonomy: string; maxSessions: number } }): PlanJob {
+  create(input: { goal: string; projectId: number; epicId: string | null; dryRun: boolean; exec?: string; autoModel?: boolean; engage?: { autonomy: string; maxSessions: number }; prEnabled?: boolean | null }): PlanJob {
     this.prune();
     const job: PlanJob = { id: `pj-${randomBytes(5).toString('hex')}`, status: 'planning', phases: [], ...input };
     this.jobs.set(job.id, job);

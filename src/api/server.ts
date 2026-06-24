@@ -538,18 +538,28 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const epicId = job.epicId ?? newId();
     let epic = d.tasks.get(epicId);
     if (!epic) {
-      epic = d.tasks.create({ id: epicId, project_id: job.projectId, title: job.goal, type: 'epic', description: job.goal });
+      // A per-task PR override rides as a `pr:on`/`pr:off` epic label (missionGit reads it first, before
+      // the project/global default). Only stamped on a fresh epic — a replan must never flip the mode.
+      const prLabels = job.prEnabled === true ? ['pr:on'] : job.prEnabled === false ? ['pr:off'] : [];
+      epic = d.tasks.create({ id: epicId, project_id: job.projectId, title: job.goal, type: 'epic', description: job.goal, labels: prLabels });
       d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
     }
     const existing = d.tasks.descendants(epic.id);
     const dependedOn = new Set(d.tasks.depsAmong(existing.map((t) => t.id)).map((e) => e.depends_on_id));
     const leaves = existing.map((t) => t.id).filter((id) => !dependedOn.has(id));
     const overallGoal = epic.description?.trim() || epic.title;
+    // Agent names double as tmux session names AND as the janitor/deriver's session↔task key, so the
+    // "one agent name ↔ one task" invariant is load-bearing. The pilot (an LLM) can hand the same name
+    // to several phases; honour each only while it's still free (across the epic's existing tasks and
+    // this batch), else drop it so the engine assigns a fresh unique name via freeAgentName at spawn.
+    const usedAgents = new Set(existing.flatMap((t) => t.labels.filter((l) => l.startsWith('agent:')).map((l) => l.slice('agent:'.length))));
     const created: Task[] = [];
     let prevId: string | null = null;
     for (const ph of job.phases) {
       const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${overallGoal}` : `Overall goal: ${overallGoal}`;
-      const child = d.tasks.create({ id: newId(), project_id: job.projectId, title: ph.title, type: ph.type, parent_id: epic.id, labels: ph.agent ? [`agent:${ph.agent}`] : [], description: childDesc });
+      const agentLabels = ph.agent && !usedAgents.has(ph.agent) ? [`agent:${ph.agent}`] : [];
+      if (agentLabels.length) usedAgents.add(ph.agent!);
+      const child = d.tasks.create({ id: newId(), project_id: job.projectId, title: ph.title, type: ph.type, parent_id: epic.id, labels: agentLabels, description: childDesc });
       if (prevId) d.tasks.addDep(child.id, prevId); // chain within the new batch
       else for (const leaf of leaves) d.tasks.addDep(child.id, leaf); // first new phase waits on the tail
       // exec: auto mode takes the planner's per-phase pick, manual mode the job-level choice. Either
@@ -1052,8 +1062,10 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     return c.json({ ok: true, tasks: removed.tasks, missions: removed.missions, events });
   });
   app.post('/tasks/plan', async c => {
-    const b = await c.req.json() as { goal?: string; exec?: string; autoModel?: boolean; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title?: string; type?: string }[]; dryRun?: boolean; prompt?: string; project_id?: number };
+    const b = await c.req.json() as { goal?: string; exec?: string; autoModel?: boolean; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title?: string; type?: string }[]; dryRun?: boolean; prompt?: string; project_id?: number; prEnabled?: boolean | null };
     const goal = (b.goal ?? '').trim();
+    // Tri-state PR override: true (force on) / false (force off) / null|undefined (inherit project+global).
+    const prEnabled = b.prEnabled === true ? true : b.prEnabled === false ? false : null;
     if (!goal) return c.json({ error: 'goal required' }, 400);
     if (b.exec && !d.config.get().allowedExecs.includes(b.exec)) return c.json({ error: 'exec not allowed' }, 400);
     if (b.exec && !execAllowedForUser(c, b.exec)) return c.json({ error: 'exec not allowed for user' }, 403);
@@ -1065,7 +1077,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
       if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
       if (b.dryRun === true) return c.json({ phases }); // playground preview, nothing persisted
-      const job = planJobs.create({ goal, projectId: target.project.id, epicId: null, dryRun: false, exec: b.exec });
+      const job = planJobs.create({ goal, projectId: target.project.id, epicId: null, dryRun: false, exec: b.exec, prEnabled });
       job.phases = phases;
       const { epic, phases: created } = persistPlan(job);
       job.epicId = epic.id;
@@ -1082,6 +1094,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       // Auto mode lets the planner pick a model per phase, so no uniform exec rides along.
       exec: b.autoModel ? undefined : b.exec, autoModel: b.autoModel === true,
       engage: b.engage === true ? { autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1 } : undefined,
+      prEnabled,
     });
     d.bus.publish({ type: 'plan', jobId: job.id, status: 'planning' });
     if (cfg.autopilot.pilotExec && d.pilot) {
@@ -1452,6 +1465,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const res = await d.missionGit.openPr(id);
     switch (res.state) {
       case 'opened': return c.json({ url: res.url, number: res.number });
+      case 'incomplete': return c.json({ error: 'mission is not finished yet — wait until all phases complete' }, 409);
       case 'verify-failed': return c.json({ error: 'verify command failed', output: res.output }, 422);
       case 'no-remote': return c.json({ error: 'project has no GitHub remote to push to' }, 422);
       case 'pr-failed': return c.json({ error: 'gh CLI unavailable or unauthenticated' }, 422);

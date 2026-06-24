@@ -108,6 +108,10 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
   const autonomy = autonomyPick ?? config?.defaults?.autonomy ?? 'L3';
   const maxSessions = maxSessionsPick ?? config?.defaults?.maxSessions ?? 1;
   const [engage, setEngage] = useState(false);
+  // Per-task GitHub PR workflow override, mirroring the Projects page tri-state: 'default' inherits the
+  // project/global setting, 'on'/'off' force it for this task. Sent as prEnabled true/false/null.
+  const [prMode, setPrMode] = useState<'default' | 'on' | 'off'>('default');
+  const prEnabled = prMode === 'on' ? true : prMode === 'off' ? false : null;
   // When on, the planner picks a model per phase from the model descriptions; the manual exec picker
   // is hidden and no uniform exec is sent.
   const [autoModel, setAutoModel] = useState(false);
@@ -160,7 +164,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
     setPlanError(null);
     try {
       // Autopilot planning is async: the endpoint returns a job; the effect renders it on done.
-      const r = await plan.mutateAsync({ goal: goal.trim(), exec: autoModel ? undefined : (exec || undefined), autoModel, autonomy, maxSessions, engage, project_id: projectId });
+      const r = await plan.mutateAsync({ goal: goal.trim(), exec: autoModel ? undefined : (exec || undefined), autoModel, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
       if ('jobId' in r) setPlanJobId(r.jobId);
       else finishSync(r);
     } catch (e) {
@@ -175,7 +179,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
     const phases = manualPhases.map((p) => ({ title: p.title.trim(), type: p.type })).filter((p) => p.title);
     if (phases.length === 0) { toast(t.tasks.addAtLeastOnePhase, 'error'); return; }
     try {
-      const r = await plan.mutateAsync({ goal: goal.trim(), phases, exec: exec || undefined, autonomy, maxSessions, engage, project_id: projectId });
+      const r = await plan.mutateAsync({ goal: goal.trim(), phases, exec: exec || undefined, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
       if ('jobId' in r) setPlanJobId(r.jobId); else finishSync(r); // manual returns a PlanResult synchronously
     } catch (e) { toast(String(e), 'error'); }
   }
@@ -339,6 +343,13 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
             </div>
             <Field label={t.tasks.autoModelLabel} hint={t.tasks.autoModelHint}>
               <Toggle checked={autoModel} onChange={setAutoModel} label={t.tasks.autoModelLabel} />
+            </Field>
+            <Field label={t.tasks.fieldPrMode} hint={t.tasks.prModeHint}>
+              <Select value={prMode} onChange={(e) => setPrMode(e.target.value as 'default' | 'on' | 'off')}>
+                <option value="default">{t.tasks.prModeDefault}</option>
+                <option value="on">{t.tasks.prModeOn}</option>
+                <option value="off">{t.tasks.prModeOff}</option>
+              </Select>
             </Field>
             {!autoModel && execSelect}
             <button type="button" onClick={() => setEngage((v) => !v)} className="flex w-fit items-center gap-2 text-sm text-text">

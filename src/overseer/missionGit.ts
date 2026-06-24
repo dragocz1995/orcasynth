@@ -18,6 +18,7 @@ export type FinishResult =
   | { state: 'ready' }                                  // verified, awaiting a manual "Open PR"
   | { state: 'no-remote' }                              // no origin remote → couldn't push
   | { state: 'pr-failed' }                              // gh missing/unauthenticated → PR not opened
+  | { state: 'incomplete' }                             // manual open refused — the mission hasn't finished yet
   | { state: 'opened'; url: string; number: number };   // PR opened (or an existing one re-read)
 
 export interface MissionGitDeps {
@@ -41,9 +42,13 @@ export type IngestResult =
 export class MissionGit {
   constructor(private d: MissionGitDeps) {}
 
-  /** Whether the PR-native workflow is on for this mission's project: the project's own override wins
-   *  (`pr_enabled` true/false), else the global autopilot default. Lets each project run a different flow. */
+  /** Whether the PR-native workflow is on for this mission. Resolution order, most specific first: the
+   *  epic's own `pr:on`/`pr:off` label (the per-task choice from the task form), then the project's
+   *  `pr_enabled` override, then the global autopilot default. Lets one task opt in/out independently. */
   private prEnabled(missionId: string): boolean {
+    const epic = this.d.tasks.get(missionId.replace(/^m-/, ''));
+    if (epic?.labels.includes('pr:on')) return true;
+    if (epic?.labels.includes('pr:off')) return false;
     const override = this.projectFor(missionId)?.pr_enabled ?? null;
     return override ?? this.d.config.get().autopilot.prEnabled;
   }
@@ -139,8 +144,14 @@ export class MissionGit {
     return this.finalize(missionId, false);
   }
 
-  /** Manual "Open PR": same verify gate, then always push + open regardless of the auto-open setting. */
+  /** Manual "Open PR": same verify gate, then always push + open regardless of the auto-open setting.
+   *  Refuses while the mission is still in flight: the affordance is only valid once finishMission has
+   *  marked the mission 'ready' (all phases done + verified, auto-open off), or to re-push an already
+   *  'open' PR. A null state (just engaged, work in progress) or verify_failed must NEVER open a partial
+   *  PR — the regression where clicking "Open PR" after the first phase shipped half a mission. */
   async openPr(missionId: string): Promise<FinishResult> {
+    const rec = this.d.prs.get(missionId);
+    if (rec && rec.pr_state !== 'ready' && rec.pr_state !== 'open') return { state: 'incomplete' };
     return this.finalize(missionId, true);
   }
 
@@ -162,7 +173,12 @@ export class MissionGit {
     // prAutoOpen gates only the FIRST open. Once a PR exists, a completed fix round must always push so
     // the PR reflects the new commits — otherwise the feedback loop commits a fix nobody ever sees.
     const prAlreadyOpen = rec.pr_state === 'open';
-    if (!force && !prAlreadyOpen && !cfg.prAutoOpen) return { state: 'ready' }; // verified, waiting for a manual open
+    if (!force && !prAlreadyOpen && !cfg.prAutoOpen) {
+      // Verified and complete, but auto-open is off: persist 'ready' so the manual "Open PR" affordance
+      // (UI + the openPr guard) is gated on actual completion, not merely on the worktree existing.
+      this.d.prs.setPrState(missionId, 'ready');
+      return { state: 'ready' };
+    }
     return this.pushAndOpen(missionId, rec.worktree, rec.branch, project.path, cfg.prBaseBranch);
   }
 

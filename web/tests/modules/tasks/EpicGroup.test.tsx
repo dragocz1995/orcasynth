@@ -99,16 +99,25 @@ describe('EpicGroup — PR-native surface', () => {
     expect(link.textContent).toContain('42');
   });
 
-  it('offers "Open PR" (POST /missions/:id/pr) when verified but not yet opened', async () => {
+  it('offers "Open PR" (POST /missions/:id/pr) only once the mission is ready', async () => {
     let opened: string | null = null;
     server.use(
-      http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: null, prUrl: null, prState: null })])),
+      http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: null, prUrl: null, prState: 'ready' })])),
       http.post('*/api/missions/:id/pr', ({ params }) => { opened = params.id as string; return HttpResponse.json({ url: 'https://github.com/o/r/pull/9', number: 9 }); }),
     );
     renderEpic();
     const btn = await screen.findByRole('button', { name: /open pr/i });
     fireEvent.click(btn);
     await waitFor(() => expect(opened).toBe('m-orca-epic'));
+  });
+
+  it('does NOT offer "Open PR" mid-mission (worktree provisioned but no phases done yet)', async () => {
+    // The regression guard: prState null means the mission just engaged / is still running — the
+    // affordance must stay hidden so a partial PR can't be opened after only the first phase.
+    server.use(http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: null, prUrl: null, prState: null })])));
+    renderEpic();
+    await screen.findByText('Ship feature'); // rendered
+    expect(screen.queryByRole('button', { name: /open pr/i })).toBeNull();
   });
 
   it('shows neither link nor button when the verify gate failed', async () => {

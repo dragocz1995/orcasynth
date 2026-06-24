@@ -28,11 +28,11 @@ describe('TaskModal — auto model toggle', () => {
     fireEvent.click(screen.getByText('Autopilot · Planning'));
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'build x' } });
 
-    // Planning mode shows two selects: autonomy + executor.
-    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    // Planning mode shows three selects: autonomy + PR workflow + executor.
+    expect(screen.getAllByRole('combobox')).toHaveLength(3);
     fireEvent.click(screen.getByRole('switch', { name: 'Autopilot picks the model' }));
-    // Executor picker is gone → only autonomy remains.
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    // Executor picker is gone → autonomy + PR workflow remain.
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate plan' }));
     await waitFor(() => expect(planBody).not.toBeNull());
