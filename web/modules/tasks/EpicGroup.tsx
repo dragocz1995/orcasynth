@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { ChevronRight, Trash2, Play, Pause, Power, Rocket, Plus, Coins } from 'lucide-react';
+import { ChevronRight, Trash2, Play, Pause, Power, Rocket, Plus, Coins, GitPullRequest } from 'lucide-react';
 import type { Task } from '../../lib/types';
 import { Badge } from '../../components/ui/Badge';
 import { ProgressRibbon } from '../../components/ui/ProgressRibbon';
@@ -10,7 +10,7 @@ import { ActionMenu } from '../../components/ui/ActionMenu';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 import { useToast } from '../../components/ui/Toast';
 import { orcaClient } from '../../lib/orcaClient';
-import { useDeleteMission, useEngage, usePauseMission, useResumeMission, useDisengage } from '../../lib/mutations';
+import { useDeleteMission, useEngage, usePauseMission, useResumeMission, useDisengage, useOpenMissionPr } from '../../lib/mutations';
 import { useSessions, useSessionSignals, useMissions, useConfig } from '../../lib/queries';
 import { TaskCard } from './TaskCard';
 import { AddPhaseModal } from './AddPhaseModal';
@@ -46,6 +46,7 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
   const pause = usePauseMission();
   const resume = useResumeMission();
   const disengage = useDisengage();
+  const openPr = useOpenMissionPr();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [addingPhase, setAddingPhase] = useState(false);
   const { done, total } = epicProgress(phases);
@@ -80,6 +81,9 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
   const onPause = () => pause.mutate(mission!.id, { onSuccess: () => toast(t.missions.pausedMsg), onError: (e) => toast(String(e), 'error') });
   const onResume = () => resume.mutate(mission!.id, { onSuccess: () => toast(t.missions.resumed), onError: (e) => toast(String(e), 'error') });
   const onDisengage = () => disengage.mutate(mission!.id, { onSuccess: () => toast(t.missions.disengaged), onError: (e) => toast(String(e), 'error') });
+  const onOpenPr = () => openPr.mutate(mission!.id, { onSuccess: (r) => toast(t.missions.prOpened.replace('{n}', String(r.number))), onError: (e) => toast(String(e), 'error') });
+  // PR-native surfacing: a pr record with a url → link out; one without (verified, waiting) → "Open PR".
+  const pr = mission?.pr ?? null;
 
   // No overflow-hidden on the card: it would clip the action menu's dropdown (which must overlay
   // below the card). Corners stay clean because the only child reaching them — the expanded phase
@@ -117,6 +121,20 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
         {/* Mission lifecycle controls — siblings of the toggle button (never nested, so the HTML stays
             valid and a control click doesn't also collapse the epic). */}
         <div className="flex items-center gap-1 pr-3">
+          {pr?.prUrl ? (
+            <a
+              href={pr.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+              title={t.missions.viewPr}
+            >
+              <GitPullRequest size={13} className="shrink-0" aria-hidden />#{pr.prNumber}
+            </a>
+          ) : pr && pr.prState !== 'verify_failed' ? (
+            <ActionPill icon={GitPullRequest} label={t.missions.openPr} tone="accent" onClick={onOpenPr} disabled={openPr.isPending} />
+          ) : null}
           {!live && !epicClosed && !mission ? (
             <ActionPill icon={Rocket} label={t.missions.engage} tone="accent" onClick={onEngage} disabled={engage.isPending} />
           ) : null}

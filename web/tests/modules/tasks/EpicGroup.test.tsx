@@ -87,3 +87,35 @@ describe('EpicGroup — delete mission', () => {
     expect(calls).not.toHaveBeenCalled();
   });
 });
+
+describe('EpicGroup — PR-native surface', () => {
+  const mission = (pr: unknown) => ({ id: 'm-orca-epic', epic_id: 'orca-epic', autonomy: 'L3', max_sessions: 1, state: 'disengaged', pr });
+
+  it('links out to the open PR when one exists', async () => {
+    server.use(http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: 42, prUrl: 'https://github.com/o/r/pull/42', prState: 'open' })])));
+    renderEpic();
+    const link = await screen.findByTitle(/view pull request/i);
+    expect(link).toHaveAttribute('href', 'https://github.com/o/r/pull/42');
+    expect(link.textContent).toContain('42');
+  });
+
+  it('offers "Open PR" (POST /missions/:id/pr) when verified but not yet opened', async () => {
+    let opened: string | null = null;
+    server.use(
+      http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: null, prUrl: null, prState: null })])),
+      http.post('*/api/missions/:id/pr', ({ params }) => { opened = params.id as string; return HttpResponse.json({ url: 'https://github.com/o/r/pull/9', number: 9 }); }),
+    );
+    renderEpic();
+    const btn = await screen.findByRole('button', { name: /open pr/i });
+    fireEvent.click(btn);
+    await waitFor(() => expect(opened).toBe('m-orca-epic'));
+  });
+
+  it('shows neither link nor button when the verify gate failed', async () => {
+    server.use(http.get('*/api/missions', () => HttpResponse.json([mission({ branch: 'orca/x', prNumber: null, prUrl: null, prState: 'verify_failed' })])));
+    renderEpic();
+    await screen.findByText('Ship feature'); // rendered
+    expect(screen.queryByRole('link', { name: /view pull request/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /open pr/i })).toBeNull();
+  });
+});

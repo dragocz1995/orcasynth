@@ -10,7 +10,7 @@ export interface SessionInfo { name: string; role: SessionRole; agent: string; m
 type Autonomy = 'L0' | 'L1' | 'L2' | 'L3';
 /** Lifecycle state of a mission, set by the daemon (`src/overseer/missionEngine.ts`). */
 type MissionState = 'active' | 'paused' | 'disengaged' | 'stalled';
-export interface Mission { id: string; epic_id: string; autonomy: Autonomy; max_sessions: number; state: MissionState }
+export interface Mission { id: string; epic_id: string; autonomy: Autonomy; max_sessions: number; state: MissionState; pr?: MissionPrInfo | null }
 export interface CreateTaskInput { title: string; type?: string; priority?: string; description?: string; scheduled_at?: string | null; autostart?: number; deps?: string[]; project_id?: number }
 export interface UpdateTaskInput { title?: string; type?: string; priority?: string; description?: string; scheduled_at?: string | null; autostart?: number; deps?: string[] }
 export interface PlanInput { goal: string; exec?: string; autoModel?: boolean; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title: string; type?: string }[]; project_id?: number }
@@ -53,12 +53,14 @@ export interface ConfigPatch {
 export interface MissionTask { id: string; title: string; status: TaskStatus; type: string; parent_id: string | null; labels?: string[]; outcome?: TaskOutcome | null }
 interface MissionProgress { total: number; open: number; inProgress: number; blocked: number; closed: number; cancelled: number }
 export interface MissionDeps { taskId: string; dependsOnId: string }
+export interface MissionPrInfo { branch: string; prNumber: number | null; prUrl: string | null; prState: string | null }
 export interface MissionDetail {
   mission: Mission;
   epic: MissionTask | null;
   tasks: MissionTask[];
   deps: MissionDeps[];
   progress: MissionProgress;
+  pr?: MissionPrInfo | null;
 }
 export interface User { id: number; username: string; created_at: string; is_admin: boolean; allowed_execs: string[]; name: string; email: string; avatar: string; default_exec: string; advisor_exec: string; advisor_autostart: boolean }
 export interface UserPatch { is_admin?: boolean; allowed_execs?: string[] }

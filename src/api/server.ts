@@ -882,9 +882,11 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
             const localDestructive = isDestructive(`${existing.title} ${b.result_summary ?? ''}`);
             // Hand the overseer the REAL evidence — the working-tree changes — not just the agent's
             // self-reported summary, so the review judges the diff instead of rubber-stamping. Workers
-            // don't commit, so `git diff HEAD` is the phase's actual change set (cumulative across a
-            // sequential mission, which the overseer reads against the phase's stated scope).
-            const reviewPath = d.projects?.get(existing.project_id)?.path ?? d.project.path;
+            // don't commit, so `git diff HEAD` is the phase's actual change set. In PR-native mode the
+            // agent edits the mission's worktree (and Orca commits each approved phase), so read the diff
+            // THERE — the main checkout would show nothing. Without a worktree it's the project checkout,
+            // where the diff is cumulative across the sequential mission.
+            const reviewPath = d.missionGit?.worktreeFor(mission.id) ?? d.projects?.get(existing.project_id)?.path ?? d.project.path;
             const { changedFiles, diff } = await projectReviewDiff(reviewPath);
             const reviewCtx = buildReviewContext({ title: existing.title, outcome: b.outcome ?? '', summary: b.result_summary ?? '', changedFiles, diff });
             void decisionQueue.enqueue(mission.id, 'review', reviewCtx, localDestructive)
@@ -1314,14 +1316,18 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
   app.get('/missions', c => {
     const allowed = accessibleProjects(c);
     const live = d.missions.live();
-    return c.json(allowed ? live.filter((m) => { const epic = d.tasks.get(m.epic_id); return epic && allowed.has(epic.project_id); }) : live);
+    const visible = allowed ? live.filter((m) => { const epic = d.tasks.get(m.epic_id); return epic && allowed.has(epic.project_id); }) : live;
+    // Attach PR-native metadata (branch/PR url+state) so the tasks view can show a badge + "Open PR"
+    // without a per-mission detail fetch. Null for non-PR missions.
+    return c.json(visible.map((m) => ({ ...m, pr: d.missionGit?.prInfo(m.id) ?? null })));
   });
   app.get('/missions/:id', (c) => {
     const mission = d.missions.get(c.req.param('id'));
     if (!mission) return c.json({ error: 'mission not found' }, 404);
     if (!missionAccessible(c, mission.epic_id)) return c.json({ error: 'forbidden' }, 403);
     const detail = assembleMissionDetail({ missions: d.missions, tasks: d.tasks }, c.req.param('id'));
-    return detail ? c.json(detail) : c.json({ error: 'mission not found' }, 404);
+    if (!detail) return c.json({ error: 'mission not found' }, 404);
+    return c.json({ ...detail, pr: d.missionGit?.prInfo(c.req.param('id')) ?? null });
   });
   app.post('/missions', async c => {
     const b = await c.req.json().catch(() => ({})) as { epicId?: string; autonomy?: string; maxSessions?: number };

@@ -91,6 +91,8 @@ export const orcaClient = {
   pauseMission: (id: string) => req<Mission>(`/missions/${id}`, json({ action: 'pause' }, 'PATCH')),
   resumeMission: (id: string) => req<Mission>(`/missions/${id}`, json({ action: 'resume' }, 'PATCH')),
   disengageMission: (id: string) => req<{ ok: boolean }>(`/missions/${id}`, { method: 'DELETE' }),
+  /** Manually open the PR for a PR-native mission (auto-open off). Returns the PR url + number. */
+  openMissionPr: (id: string) => req<{ url: string; number: number }>(`/missions/${id}/pr`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }),
   getConfig: () => req<OrcaConfig>('/config'),
   updateConfig: (patch: ConfigPatch) => req<OrcaConfig>('/config', json(patch, 'PUT')),
   login: (username: string, password: string) => req<AuthResult>('/auth/login', json({ username, password })),

@@ -97,6 +97,13 @@ export class MissionGit {
     return this.d.prs.get(missionId)?.pr_state ?? null;
   }
 
+  /** Branch + PR metadata for the mission, for the web UI (badge, link, "Open PR" affordance). Null
+   *  when the mission has no PR-native record (mode off / not engaged in PR mode). */
+  prInfo(missionId: string): { branch: string; prNumber: number | null; prUrl: string | null; prState: string | null } | null {
+    const rec = this.d.prs.get(missionId);
+    return rec ? { branch: rec.branch, prNumber: rec.pr_number, prUrl: rec.pr_url, prState: rec.pr_state } : null;
+  }
+
   /** Finalise a mission at epic-done: run the verify gate, then (when auto-open is on) push the branch
    *  and open the PR. With auto-open off, a passing gate returns 'ready' and waits for a manual open.
    *  A failing gate records 'verify_failed' and opens nothing. No-op when PR mode is off. */

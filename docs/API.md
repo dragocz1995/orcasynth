@@ -1711,6 +1711,31 @@ Sets state to `disengaged` and kills all associated agent sessions.
 { "error": "forbidden" }
 ```
 
+### PR-native workflow (optional)
+
+Active only when `config.autopilot.prEnabled` is set (see [CONCEPTS](CONCEPTS.md#pr-native-workflow-optional)). The mission's branch + PR metadata is attached to `GET /missions` and `GET /missions/:id` as a `pr` field (`{ branch, prNumber, prUrl, prState }`, or `null`).
+
+```http
+POST /missions/:id/pr
+```
+
+Manually open the PR for a PR-native mission (used when `prAutoOpen` is off). Runs the verify gate, pushes the branch and opens the PR via `gh`.
+
+**Response `200`**
+```json
+{ "url": "https://github.com/owner/repo/pull/42", "number": 42 }
+```
+
+**Error `422`** — the verify command failed (`{ "error": "...", "output": "..." }`), the project has no GitHub remote, or `gh` is unavailable/unauthenticated. **Error `400`** when PR workflow isn't enabled; **`404`** unknown mission; **`403`** forbidden.
+
+```http
+POST /missions/:id/pr/sync
+```
+
+Ingest any new PR review feedback now (the daemon also polls every ~60 s). A *changes requested* review appends a fix phase and re-engages the mission.
+
+**Response `200`** — `{ "action": "fix-created", "taskId": "..." }`, `{ "action": "closed" }` (PR merged/closed), or `{ "action": "none" }`.
+
 ### Overseer long-poll (parked agent)
 
 Used by the parked per-mission Overseer agent when `config.autopilot.overseerExec` is set. The agent

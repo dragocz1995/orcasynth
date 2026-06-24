@@ -140,6 +140,22 @@ Every enqueued decision is guaranteed to settle: by the agent's verdict, by the 
 
 ---
 
+## PR-native workflow (optional)
+
+Off by default. When **Settings → Autopilot → PR workflow** is enabled, each mission runs isolated and ships a real GitHub pull request instead of leaving uncommitted changes in the main checkout. It **complements** the overseer review (which still gates phases) — the PR is the final human gate plus a feedback loop.
+
+**Config** (`config.autopilot`): `prEnabled`, `prBaseBranch` (empty → auto-detect `origin/HEAD`, else `main`), `prAutoOpen` (open the PR automatically vs. a manual "Open PR"), `prVerifyCommand` (a gate command run in the worktree before the PR opens), and a write-only `ghToken` (exposed only as `ghTokenSet`; the raw token never leaves the daemon).
+
+**Lifecycle** (orchestrated by `MissionGit`, tracked in the `mission_pr` table):
+1. **Engage** → a dedicated branch `orca/<slug>-<epicId>` and a sibling git **worktree** (`<repo-parent>/.orca-worktrees/<slug>-<missionId>`) are created; the mission's agents run there, not in the main checkout.
+2. **Per phase** → on the approving review verdict (or on close when review-on-done is off), the daemon commits that phase's worktree changes with the phase title. A rejected phase never commits.
+3. **Epic done** → the optional `prVerifyCommand` runs in the worktree. Non-zero **holds the mission** (`stalled`, escalation surfaced) and opens nothing. Green → push the branch and open the PR (auto), or wait for a manual `POST /missions/:id/pr`.
+4. **Feedback loop** → a ~60 s poller (`prFeedback`, plus on-demand `POST /missions/:id/pr/sync`) reads each open PR's reviews; a new *changes requested* review appends a single **fix phase** under the epic (carrying the aggregated feedback) and re-engages the mission, so an agent applies it in the worktree and the next push updates the PR. Dedup is by `last_review_ts`; a merged/closed PR stops the watch.
+
+The worktree is torn down on pause/disengage (the branch is kept). GitHub-only via the `gh` CLI: a missing `gh`/token/remote degrades to a no-op + warning, leaving the rest of autopilot unaffected.
+
+---
+
 ## Pilot Agent (AI planning)
 
 When `config.autopilot.pilotExec` is set, `POST /tasks/plan` spawns a **Pilot** agent in the repository instead of using the relay-based planner. The Pilot:

@@ -5,12 +5,15 @@ import type { Mission, MissionStore } from './missionStore.js';
 interface MissionProgress {
   total: number; open: number; inProgress: number; blocked: number; closed: number; cancelled: number;
 }
+interface MissionPrInfo { branch: string; prNumber: number | null; prUrl: string | null; prState: string | null }
 export interface MissionDetail {
   mission: Mission;
   epic: Task | null;
   tasks: Task[];
   deps: { taskId: string; dependsOnId: string }[];
   progress: MissionProgress;
+  /** PR-native branch/PR metadata, when the mission runs in PR mode. Absent otherwise. */
+  pr?: MissionPrInfo | null;
 }
 
 export function assembleMissionDetail(
