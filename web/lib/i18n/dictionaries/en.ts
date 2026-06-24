@@ -43,6 +43,7 @@ export const en = {
     retry: 'Retry',
     edit: 'Edit',
     close: 'Close',
+    back: 'Back',
     live: 'Live',
     goTo: 'Go to',
     searchCommands: 'Search commands…',

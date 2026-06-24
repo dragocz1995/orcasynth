@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useRef, useState, useEffect } from 'react';
-import { File as FileIcon, Save, Code2, GitCompare, X, FilePlus, FolderPlus, Pencil, Copy, Trash2, ClipboardCopy, Eye, WrapText, Maximize2, Minimize2, PanelLeft } from 'lucide-react';
+import { File as FileIcon, Save, Code2, GitCompare, X, FilePlus, FolderPlus, Pencil, Copy, Trash2, ClipboardCopy, Eye, WrapText, Maximize2, Minimize2, PanelLeft, ChevronLeft } from 'lucide-react';
 import {
   useProjectFiles, useProjectFile, useProjectFileAtHead, useProjectCommit, useProjectCommitFileDiff,
   useProjectChanged, useProjectChanges,
@@ -235,6 +235,19 @@ export function ProjectEditor({ projectId, onClose, initialCommit, initialWorkin
     >
       {/* toolbar */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        {/* On mobile fullscreen the editor covers the app nav, so a prominent back button is the way
+            out of the editor (calls onClose → leaves back to the app). */}
+        {mobile && fullscreen && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t.common.back}
+            title={t.common.back}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-elevated hover:text-text"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
         {/* On mobile (fullscreen + tree hidden) a toggle surfaces the file tree as an overlay. */}
         {mobile && fullscreen && (
           <button
@@ -248,8 +261,10 @@ export function ProjectEditor({ projectId, onClose, initialCommit, initialWorkin
             <PanelLeft size={15} />
           </button>
         )}
-        <Code2 size={15} className="text-accent" aria-hidden />
-        <span className="text-sm font-semibold text-text">{t.projects.editorTitle}</span>
+        <Code2 size={15} className="shrink-0 text-accent" aria-hidden />
+        {/* On a phone the toolbar is tight (back + tree toggle + tab buttons), so drop the static
+            "Code editor" label — the icon is marker enough — and keep the row to one line. */}
+        {!(mobile && fullscreen) && <span className="text-sm font-semibold text-text">{t.projects.editorTitle}</span>}
         {working ? <span className="truncate font-mono text-xs text-warning"><GitCompare size={11} className="mr-1 inline" aria-hidden />{t.projects.workingChanges}</span>
           : commit ? <button type="button" onClick={() => setSelected(null)} disabled={!selected} title={selected ? t.projects.viewCommit : undefined} className="flex min-w-0 items-center truncate font-mono text-xs text-accent transition-colors enabled:hover:text-text disabled:cursor-default"><GitCompare size={11} className="mr-1 inline shrink-0" aria-hidden /><span className="truncate">{t.projects.commitLabel} {commit.slice(0, 8)}{selected ? ` · ${selected}` : ''}</span></button>
           : null}
@@ -263,16 +278,18 @@ export function ProjectEditor({ projectId, onClose, initialCommit, initialWorkin
               <Button variant="accent" icon={Save} disabled={!dirty || write.isPending} onClick={save}>{t.common.save}</Button>
             </>
           ) : null}
-          {onClose ? <button type="button" aria-label={t.common.close} onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-elevated hover:text-text"><X size={15} /></button> : null}
+          {onClose && !(mobile && fullscreen) ? <button type="button" aria-label={t.common.close} onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-elevated hover:text-text"><X size={15} /></button> : null}
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      {/* `relative` scopes the mobile tree overlay (absolute) to this row — without it the overlay
+          resolves against the fixed fullscreen container and rides up over the toolbar. */}
+      <div className="relative flex min-h-0 flex-1">
         {/* File tree. On desktop it's a fixed 256px sidebar. On mobile fullscreen it's a togglable
             overlay (default hidden) so it never eats the narrow viewport. */}
         {(mobile && fullscreen && !showTree) ? null : (
           <div
-            className={`flex shrink-0 flex-col border-r border-border bg-bg/40 ${(mobile && fullscreen) ? 'absolute inset-y-0 left-0 z-10 w-[80%] max-w-72 shadow-lg' : 'w-64'}`}
+            className={`flex shrink-0 flex-col border-r border-border ${(mobile && fullscreen) ? 'absolute inset-y-0 left-0 z-10 w-[80%] max-w-72 bg-surface shadow-lg' : 'w-64 bg-bg/40'}`}
           >
             <div className="min-h-0 flex-1 overflow-auto p-1.5">
               {files.isLoading ? <LoadingState />

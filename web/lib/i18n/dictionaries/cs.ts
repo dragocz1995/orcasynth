@@ -43,6 +43,7 @@ export const cs = {
     retry: 'Znovu',
     edit: 'Upravit',
     close: 'Zavřít',
+    back: 'Zpět',
     live: 'Živě',
     goTo: 'Přejít na',
     searchCommands: 'Hledat příkazy…',
