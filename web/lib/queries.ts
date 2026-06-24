@@ -132,8 +132,11 @@ export const useProjectsCommits = (projectIds: number[], hours: number) =>
   useQueries({
     queries: projectIds.map((id) => ({
       queryKey: ['project-commits', id],
-      queryFn: () => orcaClient.projectCommits(id, 40),
-      refetchInterval: 15000,
+      queryFn: () => orcaClient.projectCommits(id, 25),
+      // Commits change on the scale of a push, not seconds — poll lazily to keep the timeline's
+      // background git fan-out (one `git log` per project) light.
+      refetchInterval: 60000,
+      staleTime: 30000,
     })),
     combine: (results) => {
       const cutoff = Date.now() - hours * 3600_000;
