@@ -472,6 +472,15 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
   const pathFor = (projectId: number): string =>
     projectId === d.project.id ? d.project.path : (d.projects?.get(projectId)?.path ?? d.project.path);
 
+  // Where a task's agent actually ran — the cwd its CLI logged token usage under. For a PR-native
+  // mission that's the isolated worktree, not the project checkout; otherwise the project path. A
+  // phase's mission is `m-<epicId>`, and its epic is the task's parent. Falls back to the project path
+  // when there's no worktree (PR mode off / mission torn down).
+  const usagePathFor = (task: { project_id: number; parent_id: string | null }): string => {
+    if (task.parent_id) { const wt = d.missionGit?.worktreeFor(`m-${task.parent_id}`); if (wt) return wt; }
+    return pathFor(task.project_id);
+  };
+
   // Resolve the target project for a create/plan request. Defaults to the daemon's home project;
   // any other project_id must exist and be accessible to the caller.
   const resolveTarget = (c: AccessCtx, projectId?: number):
@@ -811,7 +820,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     if (!canAccessProject(c, task.project_id)) return c.json({ error: 'forbidden' }, 403);
     // Pass the task's own project siblings so usage can disambiguate concurrent agents by start-order
     // rank, and read sessions from that project's path (not the daemon home, under multi-project).
-    return c.json(readTaskUsage(task, d.tasks.list({ project_id: task.project_id }), pathFor(task.project_id), d.fallback));
+    return c.json(readTaskUsage(task, d.tasks.list({ project_id: task.project_id }), usagePathFor(task), d.fallback));
   });
   // Total token usage aggregated per model (exec spec), for the dashboard's model column. Scoped to
   // the caller's accessible projects; optional `?project_id=N` narrows it further. Sibling lists are
@@ -828,7 +837,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     }
     const siblings = new Map<number, ReturnType<typeof d.tasks.list>>();
     for (const pid of new Set(tasks.map((t) => t.project_id))) siblings.set(pid, d.tasks.list({ project_id: pid }));
-    return c.json(aggregateUsageByExec(tasks, (t) => readTaskUsage(t, siblings.get(t.project_id) ?? [], pathFor(t.project_id), d.fallback)));
+    return c.json(aggregateUsageByExec(tasks, (t) => readTaskUsage(t, siblings.get(t.project_id) ?? [], usagePathFor(t), d.fallback)));
   });
   app.patch('/tasks/:id', async c => {
     const b = await c.req.json();
