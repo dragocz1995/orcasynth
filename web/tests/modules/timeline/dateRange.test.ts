@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_RANGE, RANGE_PRESETS, serializeRange, parseRange, isStoredRange, rangeBounds, inRange,
+  rangeWindowCapHours,
 } from '../../../modules/timeline/dateRange';
 
 describe('timeline/dateRange', () => {
@@ -53,5 +54,35 @@ describe('timeline/dateRange', () => {
     const r = { preset: 'all' as const };
     expect(inRange(0, r, now)).toBe(true);
     expect(inRange(new Date('2050-01-01T00:00:00').getTime(), r, now)).toBe(true);
+  });
+
+  describe('rangeWindowCapHours', () => {
+    const now = new Date('2026-06-23T12:00:00').getTime(); // noon on a known day
+
+    it("returns Infinity for 'all'", () => {
+      expect(rangeWindowCapHours({ preset: 'all' }, now)).toBe(Infinity);
+    });
+
+    it("returns finite hours for '7d' equal to now minus rangeBounds.fromMs", () => {
+      const { fromMs } = rangeBounds({ preset: '7d' }, now);
+      const expected = (now - fromMs) / 3_600_000;
+      expect(rangeWindowCapHours({ preset: '7d' }, now)).toBe(expected);
+      // fromMs = startOfDay(now) − 6 days; at noon that is 144h + 12h = 156 hours
+      expect(expected).toBe(156);
+    });
+
+    it("returns finite hours for '30d' equal to now minus rangeBounds.fromMs", () => {
+      const { fromMs } = rangeBounds({ preset: '30d' }, now);
+      const expected = (now - fromMs) / 3_600_000;
+      expect(rangeWindowCapHours({ preset: '30d' }, now)).toBe(expected);
+      // fromMs = startOfDay(now) − 29 days; at noon that is 696h + 12h = 708 hours
+      expect(expected).toBe(708);
+    });
+
+    it('cap for 30d is larger than cap for 7d', () => {
+      expect(rangeWindowCapHours({ preset: '30d' }, now)).toBeGreaterThan(
+        rangeWindowCapHours({ preset: '7d' }, now),
+      );
+    });
   });
 });

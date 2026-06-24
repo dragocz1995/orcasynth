@@ -45,3 +45,11 @@ export function inRange(ms: number, r: DateRange, now: number): boolean {
   const { fromMs, toMs } = rangeBounds(r, now);
   return ms >= fromMs && ms <= toMs;
 }
+
+/** Cap of the visible window in hours. For '7d'/'30d' this is finite and derived from rangeBounds
+ *  (the distance from the lower bound to now). For 'all' the window is open-ended → Infinity. */
+export function rangeWindowCapHours(r: DateRange, now: number): number {
+  if (r.preset === 'all') return Infinity;
+  const { fromMs } = rangeBounds(r, now);
+  return (now - fromMs) / 3_600_000;
+}
