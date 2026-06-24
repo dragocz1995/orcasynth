@@ -41,6 +41,19 @@ trust it more, you turn the autonomy up; when you trust it less, you turn it dow
   for each model in Settings, flip on "Autopilot picks the model," and the planner chooses
   the best-suited model for each phase from those descriptions — validated against your
   allow-list, falling back to the default on anything invalid.
+- **PR-native autopilot.** Instead of editing your checkout mid-flight, a mission can run
+  like a disciplined engineer on a branch: it works in an isolated git worktree (under
+  `<repo-parent>/.orca-worktrees/`), commits each approved phase as it lands, then runs your
+  verify command, pushes the branch, and opens a GitHub pull request. Orca ingests the PR's
+  review feedback — `CHANGES_REQUESTED` and `COMMENTED` reviews (so bot reviewers and plain
+  human comments both count) plus inline diff comments — folds it back through the Pilot as
+  1..N fix phases, and pushes the fixes to the same PR. A fix-round budget (2 automatic
+  rounds) stops review ping-pong loops: once it's spent, the mission stalls and escalates to
+  a human instead of looping forever. The UI exposes a PR badge, the fix-round count, and
+  merge-to-main / continue-mission actions; merging gates on the PR being open, mergeable,
+  and CI-green. Auth uses a configured GitHub token or falls back to the machine's `gh` CLI
+  login. Configurable globally in **Settings → GitHub** and overridable per project
+  (**Inherit / On / Off**), so each project runs its own workflow.
 - **Agent-agnostic spawning.** Runs Claude Code, OpenCode, or Codex in isolated `tmux`
   sessions, configurable per task. Each agent receives the task context and closes its own
   task when it's done.
@@ -54,8 +67,10 @@ trust it more, you turn the autonomy up; when you trust it less, you turn it dow
   missions with phase progress, a timeline, and real-time `tmux` session previews you can
   jump into and take over. Each preview is a real PTY streamed over a WebSocket (xterm),
   so you type straight into the agent — native cursor, smooth scrolling, full key support —
-  not a read-only mirror. Full EN/CS internationalization built in, and the whole dashboard
-  is responsive down to a phone.
+  not a read-only mirror. Creating a project is point-and-click too: a **Browse** button
+  opens a server-side folder picker to choose the path instead of typing it, and you pick a
+  project icon (from an image already in the repo) right after creating it. Full EN/CS
+  internationalization built in, and the whole dashboard is responsive down to a phone.
 - **Self-healing.** A stuck-session detector revives agents that die without closing out
   (and blocks the task after repeated failures instead of crash-looping). A janitor sweeps
   up finished sessions. Live token and cost usage is shown per run.
@@ -93,7 +108,7 @@ trust it more, you turn the autonomy up; when you trust it less, you turn it dow
 | **Tasks** — list + detail with live agent output and token usage. ![Tasks](docs/screenshots/tasks.png) | **Kanban** — open / in-progress / blocked / closed, with mission progress and a calendar. ![Kanban](docs/screenshots/kanban.png) |
 | **Missions** — phase graph and task flow for an autopilot run (folded into Tasks). ![Missions](docs/screenshots/missions.png) | **Timeline** — a live activity feed across tasks, missions, and signals. ![Timeline](docs/screenshots/timeline.png) |
 | **Sessions** — real-time `tmux` agent previews with one-click intervention. ![Sessions](docs/screenshots/sessions.png) | **Terminal** — an interactive real-PTY agent terminal you type straight into, including human-in-the-loop approvals. ![Terminal](docs/screenshots/terminal.png) |
-| **Pop-out terminal** — pull any session into its own standalone, chromeless window for focus. ![Pop-out terminal](docs/screenshots/terminal-popout.png) | **Settings** — per-model descriptions with brand icons, providers, autopilot, and defaults. ![Settings](docs/screenshots/settings.png) |
+| **Pop-out terminal** — pull any session into its own standalone, chromeless window for focus. ![Pop-out terminal](docs/screenshots/terminal-popout.png) | **Settings** — per-model descriptions with brand icons, providers, autopilot, a dedicated GitHub section for the PR-native workflow, and defaults. ![Settings](docs/screenshots/settings.png) |
 | **Projects** — a built-in Monaco editor with the project file tree. ![Projects editor](docs/screenshots/projects-editor.png) | |
 
 <div align="center">
@@ -179,6 +194,12 @@ and watches the output. A deriver reads each session and emits signals — `work
 `needs_input`, `complete`. When an agent hits a permission prompt, the decision engine
 either clears it automatically (high confidence, non-destructive, within the mission's
 autonomy level) or escalates it to a human.
+
+With the **PR-native workflow** enabled, that loop runs against an isolated git worktree
+rather than your live checkout: the Overseer commits each approved phase, and on completion
+verifies, pushes, and opens a pull request. PR review feedback flows back to the Pilot as
+fix phases that land on the same branch — bounded by a fix-round budget so the mission
+escalates to a human instead of trading comments with a reviewer indefinitely.
 
 ## Architecture
 
