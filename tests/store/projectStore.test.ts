@@ -30,6 +30,16 @@ describe('ProjectStore', () => {
     store.update(p.id, { icon: '' }); // clear back to the default glyph
     expect(store.get(p.id)?.icon).toBe('');
   });
+  it('defaults pr_enabled to null (inherit) and round-trips the tri-state override', () => {
+    const p = store.create({ slug: 'web', path: '/p' });
+    expect(p.pr_enabled).toBeNull(); // inherit the global default by default
+    expect(store.update(p.id, { pr_enabled: true })?.pr_enabled).toBe(true);
+    expect(store.update(p.id, { pr_enabled: false })?.pr_enabled).toBe(false);
+    expect(store.update(p.id, { pr_enabled: null })?.pr_enabled).toBeNull();
+    // an unrelated update must not clobber the override
+    store.update(p.id, { pr_enabled: true });
+    expect(store.update(p.id, { notes: 'x' })?.pr_enabled).toBe(true);
+  });
   it('updates path and notes, leaving the slug immutable', () => {
     const p = store.create({ slug: 'web', path: '/old', notes: 'old' });
     const up = store.update(p.id, { path: '/new', notes: 'new' });

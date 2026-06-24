@@ -62,6 +62,9 @@ export function openDb(path: string): Db {
   // The aggregated PR-review feedback the planner is currently fixing — surfaced in the UI so a fix
   // round is explained ("these phases address PR review X"). Cleared on merge/close. Old DBs default null.
   addColumn(db, 'mission_pr', 'last_feedback', 'TEXT');
+  // Per-project override of the GitHub PR-native workflow. NULL = inherit the global autopilot default;
+  // 1/0 = force on/off for this project (each project can run a different flow). Old DBs default NULL.
+  addColumn(db, 'projects', 'pr_enabled', 'INTEGER');
   // Seed the bootstrap admin on existing DBs: the lowest-id user, if none is flagged yet.
   db.exec("UPDATE users SET is_admin = 1 WHERE id = (SELECT MIN(id) FROM users) AND NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)");
   return db;

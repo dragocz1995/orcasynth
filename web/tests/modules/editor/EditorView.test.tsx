@@ -21,8 +21,8 @@ let mobileFlag = false;
 vi.mock('../../../lib/useMobile', () => ({ useMobile: () => mobileFlag }));
 
 const PROJECTS = [
-  { id: 7, slug: 'orca', path: '/p/orca', notes: '', icon: '' },
-  { id: 9, slug: 'other', path: '/p/other', notes: '', icon: '' },
+  { id: 7, slug: 'orca', path: '/p/orca', notes: '', icon: '', pr_enabled: null },
+  { id: 9, slug: 'other', path: '/p/other', notes: '', icon: '', pr_enabled: null },
 ];
 let projectList: typeof PROJECTS = PROJECTS;
 vi.mock('../../../lib/queries', async (orig) => ({

@@ -48,7 +48,9 @@ export function ProjectsView() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [editPath, setEditPath] = useState('');
   const [editNotes, setEditNotes] = useState('');
-  const openEdit = (p: Project) => { setEditProject(p); setEditPath(p.path); setEditNotes(p.notes); };
+  // Per-project GitHub PR-flow override: null = inherit the global default, true/false = force on/off.
+  const [editPrEnabled, setEditPrEnabled] = useState<boolean | null>(null);
+  const openEdit = (p: Project) => { setEditProject(p); setEditPath(p.path); setEditNotes(p.notes); setEditPrEnabled(p.pr_enabled); };
   // Project whose icon is being chosen (drives the icon-picker modal, stacked over the edit modal).
   const [iconFor, setIconFor] = useState<Project | null>(null);
 
@@ -71,7 +73,7 @@ export function ProjectsView() {
   function handleUpdate() {
     if (!editProject) return;
     updateProject.mutate(
-      { id: editProject.id, path: editPath, notes: editNotes },
+      { id: editProject.id, path: editPath, notes: editNotes, pr_enabled: editPrEnabled },
       {
         onSuccess: () => { setEditProject(null); toast(t.projects.updated); },
         onError: (e) => toast(String(e), 'error'),
@@ -247,6 +249,24 @@ export function ProjectsView() {
             </Field>
             <Field label={t.projects.fieldNotes} hint={t.projects.notesHint}>
               <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={4} className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-accent focus:outline-none" />
+            </Field>
+            <Field label={t.projects.prFlowLabel} hint={t.projects.prFlowHint}>
+              <div className="inline-flex rounded-md border border-border bg-surface p-0.5">
+                {([{ v: null, label: t.projects.prFlowInherit }, { v: true, label: t.projects.prFlowOn }, { v: false, label: t.projects.prFlowOff }] as { v: boolean | null; label: string }[]).map(({ v, label }) => {
+                  const on = editPrEnabled === v;
+                  return (
+                    <button
+                      key={String(v)}
+                      type="button"
+                      onClick={() => setEditPrEnabled(v)}
+                      aria-pressed={on}
+                      className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${on ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text'}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
           </ModalBody>
           <ModalFooter>

@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useEffect, useState, useRef } from 'react';
-import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, Trash2, GitPullRequest, GitBranch, TerminalSquare, type LucideIcon } from 'lucide-react';
+import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, Trash2, GitPullRequest, GitBranch, TerminalSquare, Github, type LucideIcon } from 'lucide-react';
 import { PROVIDERS, ProviderLogo, ProviderTag } from '../../modules/settings/providers';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { Select } from '../../components/ui/Select';
@@ -66,7 +66,7 @@ function ModelInput({ value, onChange, placeholder }: { value: string; onChange:
   );
 }
 
-const CATEGORY_VALUES = ['models', 'autopilot', 'providers', 'defaults', 'hermes', 'data'] as const;
+const CATEGORY_VALUES = ['models', 'autopilot', 'github', 'providers', 'defaults', 'hermes', 'data'] as const;
 type Category = (typeof CATEGORY_VALUES)[number];
 
 export default function SettingsPage() {
@@ -264,14 +264,20 @@ export default function SettingsPage() {
   // Persist only the active mode's fields, and explicitly clear the other backend so the two never
   // coexist (relay clears the execs; agents leave the relay model/key untouched but unused).
   const saveAutopilot = () => {
-    // PR-native settings are orthogonal to the relay/agents reasoning mode, so they ride along with
-    // either payload. The ghToken is write-only — sent only when the user typed a fresh one.
-    const pr = { prEnabled, prBaseBranch, prAutoOpen, prVerifyCommand, ...(ghToken ? { ghToken } : {}) };
     update.mutate(
       { autopilot: reasoningMode === 'agents'
-        ? { pilotExec, overseerExec, reviewOnDone, notes, prompt, ...pr }
-        : { model, overseerModel, apiUrl, pilotExec: '', overseerExec: '', notes, prompt, ...(apiKey ? { apiKey } : {}), ...pr } },
-      { onSuccess: () => { toast(t.settings.autopilotSaved); setApiKey(''); setGhToken(''); }, onError: (e) => toast(String(e), 'error') },
+        ? { pilotExec, overseerExec, reviewOnDone, notes, prompt }
+        : { model, overseerModel, apiUrl, pilotExec: '', overseerExec: '', notes, prompt, ...(apiKey ? { apiKey } : {}) } },
+      { onSuccess: () => { toast(t.settings.autopilotSaved); setApiKey(''); }, onError: (e) => toast(String(e), 'error') },
+    );
+  };
+
+  // GitHub / PR-native settings live in their own section. The global prEnabled is the DEFAULT for new
+  // projects; each project can override it. The ghToken is write-only — sent only when freshly typed.
+  const saveGithub = () => {
+    update.mutate(
+      { autopilot: { prEnabled, prBaseBranch, prAutoOpen, prVerifyCommand, ...(ghToken ? { ghToken } : {}) } },
+      { onSuccess: () => { toast(t.settings.githubSaved); setGhToken(''); }, onError: (e) => toast(String(e), 'error') },
     );
   };
 
@@ -299,6 +305,7 @@ export default function SettingsPage() {
   const SECTIONS: { id: Category; icon: LucideIcon }[] = [
     { id: 'models', icon: Boxes },
     { id: 'autopilot', icon: Bot },
+    { id: 'github', icon: Github },
     { id: 'providers', icon: Plug },
     { id: 'defaults', icon: SlidersHorizontal },
     { id: 'hermes', icon: Radio },
@@ -309,6 +316,7 @@ export default function SettingsPage() {
   // shared footer save button.
   const saveAction: Record<Exclude<Category, 'hermes' | 'models' | 'data'>, { label: string; onClick: () => void }> = {
     autopilot: { label: t.settings.saveAutopilot, onClick: saveAutopilot },
+    github: { label: t.settings.saveGithub, onClick: saveGithub },
     providers: { label: t.settings.saveProviders, onClick: saveProviders },
     defaults: { label: t.settings.saveDefaults, onClick: saveDefaults },
   };
@@ -502,28 +510,6 @@ export default function SettingsPage() {
               <SettingCard title={t.settings.notes} description={t.settings.notesDesc} icon={FileText}>
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className={`${inputClass} resize-none`} />
               </SettingCard>
-              {/* PR-native workflow — orthogonal to the relay/agents mode above, so it sits outside that
-                  conditional. When enabled, each mission runs in an isolated worktree on its own branch
-                  and Orca opens a real GitHub PR via `gh`. */}
-              <SettingCard title={t.settings.prEnabled} description={t.settings.prEnabledHint} icon={GitPullRequest}>
-                <Toggle checked={prEnabled} onChange={setPrEnabled} label={t.settings.prEnabled} />
-              </SettingCard>
-              {prEnabled && (
-                <>
-                  <SettingCard title={t.settings.prBaseBranch} description={t.settings.prBaseBranchHint} icon={GitBranch}>
-                    <input value={prBaseBranch} onChange={(e) => setPrBaseBranch(e.target.value)} placeholder={t.settings.prBaseBranchPlaceholder} className={inputClass} />
-                  </SettingCard>
-                  <SettingCard title={t.settings.prAutoOpen} description={t.settings.prAutoOpenHint} icon={GitPullRequest}>
-                    <Toggle checked={prAutoOpen} onChange={setPrAutoOpen} label={t.settings.prAutoOpen} />
-                  </SettingCard>
-                  <SettingCard title={t.settings.prVerifyCommand} description={t.settings.prVerifyCommandHint} icon={TerminalSquare}>
-                    <input value={prVerifyCommand} onChange={(e) => setPrVerifyCommand(e.target.value)} placeholder={t.settings.prVerifyCommandPlaceholder} className={`${inputClass} font-mono text-xs`} />
-                  </SettingCard>
-                  <SettingCard title={t.settings.ghToken} description={ghTokenSet ? t.settings.ghTokenDesc : t.settings.ghTokenNotSetDesc} icon={KeyRound}>
-                    <input type="password" value={ghToken} onChange={(e) => setGhToken(e.target.value)} placeholder={ghTokenSet ? t.settings.apiKeySetPlaceholder : t.settings.ghTokenPlaceholder} className={inputClass} />
-                  </SettingCard>
-                </>
-              )}
               <div className="sm:col-span-2 rounded-lg border border-border bg-surface p-4">
                 <div className="mb-2 flex items-center gap-1.5">
                   <span className="text-sm font-medium text-text">{t.settings.plannerPrompt}</span>
@@ -558,6 +544,27 @@ export default function SettingsPage() {
               </div>
               </div>
             </div>
+        )}
+
+        {category === 'github' && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <p className="sm:col-span-2 text-sm text-text-muted">{t.settings.githubIntro}</p>
+            <SettingCard title={t.settings.ghToken} description={ghTokenSet ? t.settings.ghTokenDesc : t.settings.ghTokenNotSetDesc} icon={KeyRound}>
+              <input type="password" value={ghToken} onChange={(e) => setGhToken(e.target.value)} placeholder={ghTokenSet ? t.settings.apiKeySetPlaceholder : t.settings.ghTokenPlaceholder} className={inputClass} />
+            </SettingCard>
+            <SettingCard title={t.settings.prEnabled} description={t.settings.prEnabledHint} icon={GitPullRequest}>
+              <Toggle checked={prEnabled} onChange={setPrEnabled} label={t.settings.prEnabled} />
+            </SettingCard>
+            <SettingCard title={t.settings.prBaseBranch} description={t.settings.prBaseBranchHint} icon={GitBranch}>
+              <input value={prBaseBranch} onChange={(e) => setPrBaseBranch(e.target.value)} placeholder={t.settings.prBaseBranchPlaceholder} className={inputClass} />
+            </SettingCard>
+            <SettingCard title={t.settings.prAutoOpen} description={t.settings.prAutoOpenHint} icon={GitPullRequest}>
+              <Toggle checked={prAutoOpen} onChange={setPrAutoOpen} label={t.settings.prAutoOpen} />
+            </SettingCard>
+            <SettingCard title={t.settings.prVerifyCommand} description={t.settings.prVerifyCommandHint} icon={TerminalSquare}>
+              <input value={prVerifyCommand} onChange={(e) => setPrVerifyCommand(e.target.value)} placeholder={t.settings.prVerifyCommandPlaceholder} className={`${inputClass} font-mono text-xs`} />
+            </SettingCard>
+          </div>
         )}
 
         {category === 'providers' && (

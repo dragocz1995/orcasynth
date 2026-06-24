@@ -28,7 +28,7 @@ function build(opts: { prAutoOpen: boolean; verify: string }) {
   config.update({ autopilot: { prEnabled: true, prAutoOpen: opts.prAutoOpen, prVerifyCommand: opts.verify, ghToken: 'tok' } });
   const prs = new MissionPrStore(db);
   const missionGit = new MissionGit({ prs, config, projects, tasks });
-  return { missionGit, prs, tasks };
+  return { missionGit, prs, tasks, projects, project };
 }
 
 beforeEach(() => {
@@ -91,6 +91,13 @@ describe('MissionGit.finishMission (Stage 4)', () => {
     const res = await missionGit.openPr('m-epic'); // manual trigger
     expect(res).toEqual({ state: 'opened', url: 'https://github.com/o/r/pull/8', number: 8 });
     expect(prs.get('m-epic')!.pr_state).toBe('open');
+  });
+
+  it('a project pr_enabled=false suppresses the PR worktree even when the global default is on', async () => {
+    const { missionGit, prs, projects, project } = build({ prAutoOpen: true, verify: '' });
+    projects.update(project.id, { pr_enabled: false }); // per-project override wins over the global default
+    await missionGit.onEngage('m-epic', 'epic');
+    expect(prs.get('m-epic')).toBeNull(); // PR mode off for this project → no worktree provisioned
   });
 
   it('mergePr squash-merges an open PR and records it merged + clears the budget', async () => {

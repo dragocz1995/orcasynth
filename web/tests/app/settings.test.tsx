@@ -130,22 +130,20 @@ describe('SettingsPage', () => {
     });
   });
 
-  it('reveals the PR-native fields when the workflow toggle is on and saves them', async () => {
+  it('saves the GitHub PR-native fields from the GitHub section', async () => {
     const { wrapper: Wrapper } = createWrapper();
     render(<Wrapper><ToastProvider><SettingsPage /></ToastProvider></Wrapper>);
     await waitFor(() => expect(screen.getByLabelText('Claude Sonnet 4.5')).toBeChecked());
 
-    fireEvent.click(screen.getByRole('button', { name: 'Autopilot' }));
-    // PR workflow defaults off → the base-branch / verify fields stay hidden.
-    expect(screen.getByLabelText('PR workflow')).not.toBeChecked();
-    expect(screen.queryByText('Verify command')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+    // The PR fields live in their own GitHub section now; the default toggle starts off.
+    expect(screen.getByLabelText(/PR workflow/)).not.toBeChecked();
+    expect(screen.getByText('Verify command')).toBeTruthy();
 
-    fireEvent.click(screen.getByLabelText('PR workflow'));
-    expect(screen.getByText('Verify command')).toBeTruthy(); // fields revealed
-
+    fireEvent.click(screen.getByLabelText(/PR workflow/));
     fireEvent.change(screen.getByPlaceholderText('e.g. npm test'), { target: { value: 'npm test' } });
     putBody = null;
-    fireEvent.click(screen.getByRole('button', { name: 'Save autopilot' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save GitHub' }));
     await waitFor(() => {
       const ap = (putBody as { autopilot: { prEnabled: boolean; prVerifyCommand: string } }).autopilot;
       expect(ap.prEnabled).toBe(true);

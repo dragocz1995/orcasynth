@@ -587,8 +587,8 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const id = Number(c.req.param('id'));
     const cur = d.projects.get(id);
     if (!cur) return c.json({ error: 'project not found' }, 404);
-    const b = await c.req.json() as { path?: string; notes?: string; icon?: string };
-    const patch: { path?: string; notes?: string; icon?: string } = {};
+    const b = await c.req.json() as { path?: string; notes?: string; icon?: string; pr_enabled?: boolean | null };
+    const patch: { path?: string; notes?: string; icon?: string; pr_enabled?: boolean | null } = {};
     if (typeof b.path === 'string' && b.path.trim()) patch.path = b.path.trim();
     if (typeof b.notes === 'string') patch.notes = b.notes;
     // Icon is a project-relative image path. '' clears it; anything else must resolve to a real image
@@ -597,6 +597,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       if (b.icon !== '' && !isProjectImage(cur.path, b.icon)) return c.json({ error: 'invalid icon path' }, 400);
       patch.icon = b.icon;
     }
+    // Tri-state PR-flow override: null = inherit the global default, a boolean = force on/off. Only a
+    // boolean or explicit null is accepted; an absent key leaves it unchanged.
+    if (b.pr_enabled === null || typeof b.pr_enabled === 'boolean') patch.pr_enabled = b.pr_enabled;
     return c.json(d.projects.update(id, patch));
   });
   // Remove a project from orca entirely: cascades to its tasks, missions, agents and access grants

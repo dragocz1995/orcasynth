@@ -23,7 +23,7 @@ export type FinishResult =
 export interface MissionGitDeps {
   prs: MissionPrStore;
   config: ConfigStore;
-  projects: { get(id: number): { id: number; slug: string; path: string } | null };
+  projects: { get(id: number): { id: number; slug: string; path: string; pr_enabled?: boolean | null } | null };
   tasks: TaskStore;
 }
 
@@ -41,10 +41,15 @@ export type IngestResult =
 export class MissionGit {
   constructor(private d: MissionGitDeps) {}
 
-  private prEnabled(): boolean { return this.d.config.get().autopilot.prEnabled; }
+  /** Whether the PR-native workflow is on for this mission's project: the project's own override wins
+   *  (`pr_enabled` true/false), else the global autopilot default. Lets each project run a different flow. */
+  private prEnabled(missionId: string): boolean {
+    const override = this.projectFor(missionId)?.pr_enabled ?? null;
+    return override ?? this.d.config.get().autopilot.prEnabled;
+  }
 
   /** The project a mission belongs to, resolved via its epic (mission id is `m-<epicId>`). */
-  private projectFor(missionId: string): { id: number; slug: string; path: string } | null {
+  private projectFor(missionId: string): { id: number; slug: string; path: string; pr_enabled?: boolean | null } | null {
     const epicId = missionId.replace(/^m-/, '');
     const epic = this.d.tasks.get(epicId);
     return epic ? this.d.projects.get(epic.project_id) : null;
@@ -54,7 +59,7 @@ export class MissionGit {
    *  and record it. Idempotent — re-engaging reuses the stored worktree. No-op when disabled, or when
    *  the project/worktree can't be set up (logged; autopilot continues in the main checkout). */
   async onEngage(missionId: string, epicId: string): Promise<void> {
-    if (!this.prEnabled()) return;
+    if (!this.prEnabled(missionId)) return;
     if (this.d.prs.get(missionId)) return; // already provisioned (re-engage)
     const project = this.projectFor(missionId);
     if (!project) { log.warn(`PR mode: no project for mission ${missionId} — skipping worktree`); return; }
@@ -80,7 +85,7 @@ export class MissionGit {
   /** Commit an approved phase's work in the mission's worktree. No-op (returns false) when PR mode is
    *  off, the mission has no worktree, or the diff is empty. */
   async commitPhase(missionId: string, phaseTitle: string): Promise<boolean> {
-    if (!this.prEnabled()) return false;
+    if (!this.prEnabled(missionId)) return false;
     const dir = this.worktreeFor(missionId);
     if (!dir) return false;
     try {
@@ -115,7 +120,7 @@ export class MissionGit {
    *  Delegates the open/conflict/CI gate to `mergePR` and, on success, records the PR as merged and
    *  clears the fix budget. Returns the refusal reason so the UI can explain a blocked merge. */
   async mergePr(missionId: string): Promise<MergeResult> {
-    if (!this.prEnabled()) return { ok: false, reason: 'PR workflow not enabled' };
+    if (!this.prEnabled(missionId)) return { ok: false, reason: 'PR workflow not enabled' };
     const rec = this.d.prs.get(missionId);
     if (!rec || rec.pr_number == null || rec.pr_state !== 'open') return { ok: false, reason: 'no open PR for this mission' };
     const res = await mergePR({ dir: rec.worktree, number: rec.pr_number, token: this.d.config.ghToken() ?? '' });
@@ -140,7 +145,7 @@ export class MissionGit {
   }
 
   private async finalize(missionId: string, force: boolean): Promise<FinishResult> {
-    if (!this.prEnabled()) return { state: 'off' };
+    if (!this.prEnabled(missionId)) return { state: 'off' };
     const rec = this.d.prs.get(missionId);
     const project = this.projectFor(missionId);
     if (!rec || !project) return { state: 'off' };
@@ -200,7 +205,7 @@ export class MissionGit {
    *  advanced here whenever feedback is returned so the same batch is never planned twice. No-op when PR
    *  mode is off. */
   async ingestReviews(missionId: string): Promise<IngestResult> {
-    if (!this.prEnabled()) return { action: 'none' };
+    if (!this.prEnabled(missionId)) return { action: 'none' };
     const rec = this.d.prs.get(missionId);
     if (!rec || rec.pr_number == null || rec.pr_state !== 'open') return { action: 'none' };
     const project = this.projectFor(missionId);

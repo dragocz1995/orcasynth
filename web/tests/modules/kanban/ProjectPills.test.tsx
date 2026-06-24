@@ -9,8 +9,8 @@ import { ToastProvider } from '../../../components/ui/Toast';
 import { createWrapper } from '../../test-utils';
 
 const PROJECTS = [
-  { id: 1, slug: 'orca', path: '/var/www/orca', notes: '', icon: '' },
-  { id: 2, slug: 'other', path: '/var/www/other', notes: '', icon: '' },
+  { id: 1, slug: 'orca', path: '/var/www/orca', notes: '', icon: '', pr_enabled: null },
+  { id: 2, slug: 'other', path: '/var/www/other', notes: '', icon: '', pr_enabled: null },
 ];
 const ALL = [
   { id: 't-a', title: 'Alpha', status: 'in_progress', type: 'task', labels: [], project_id: 1 },
