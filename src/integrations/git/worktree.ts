@@ -56,24 +56,27 @@ export async function commitAll(dir: string, message: string): Promise<boolean> 
   return true;
 }
 
-/** Push `branch` from the worktree to origin using a short-lived token-auth remote URL. GitHub-only;
- *  returns false (warn) when the repo has no `origin` remote. The token is embedded in the remote URL
- *  of a single push and never persisted to the repo config. */
+/** Push `branch` from the worktree to the **named** `origin` remote; returns false (warn) when the repo
+ *  has no `origin`. Pushing to the named remote (not a bare URL) keeps `refs/remotes/origin/*` current,
+ *  so `--force-with-lease` has a valid lease on every re-push — a bare-URL push never updates the
+ *  tracking ref and breaks the lease on the second round ("stale info"). A configured token is injected
+ *  as a one-shot `http.extraHeader` (command-scoped, never persisted); without one, git falls back to
+ *  the host's credential helper (e.g. `gh`), so the push works token-free. */
 export async function pushBranch(dir: string, branch: string, token: string): Promise<boolean> {
   const cwd = realRepo(dir);
-  let origin = '';
-  try { origin = (await run('git', ['-C', cwd, 'remote', 'get-url', 'origin'])).stdout.trim(); }
+  try { await run('git', ['-C', cwd, 'remote', 'get-url', 'origin']); }
   catch { log.warn(`push skipped for ${branch} — no origin remote`); return false; }
-  await run('git', ['-C', cwd, 'push', '--force-with-lease', authenticatedRemote(origin, token), `${branch}:${branch}`]);
+  await run('git', ['-C', cwd, ...tokenAuthArgs(token), 'push', '--force-with-lease', 'origin', `${branch}:${branch}`]);
   return true;
 }
 
-/** Rewrite an https GitHub remote to embed a token for a single push. SSH or non-GitHub remotes (and a
- *  blank token) are returned unchanged — token auth doesn't apply. */
-function authenticatedRemote(origin: string, token: string): string {
-  if (!token) return origin;
-  const m = /^https:\/\/(?:[^@/]+@)?github\.com\/(.+?)(?:\.git)?\/?$/i.exec(origin);
-  return m ? `https://x-access-token:${token}@github.com/${m[1]}.git` : origin;
+/** One-shot git auth: when a token is set, pass it as a Basic `AUTHORIZATION` header scoped to this
+ *  single command (`-c http.extraHeader=...`), never written to config. Blank token → no args, so git
+ *  uses whatever credential helper the host has configured. */
+function tokenAuthArgs(token: string): string[] {
+  if (!token) return [];
+  const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
+  return ['-c', `http.extraHeader=AUTHORIZATION: basic ${basic}`];
 }
 
 /** The base branch a PR targets: an explicit `configured` value wins; otherwise detect the remote's

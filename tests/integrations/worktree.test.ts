@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createMissionWorktree, removeWorktree, commitAll, detectBaseBranch } from '../../src/integrations/git/worktree.js';
+import { createMissionWorktree, removeWorktree, commitAll, detectBaseBranch, pushBranch } from '../../src/integrations/git/worktree.js';
 
 let repo: string;
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
@@ -72,5 +72,46 @@ describe('worktree', () => {
 
   it('detectBaseBranch honours an explicit configured base', async () => {
     expect(await detectBaseBranch(repo, 'develop')).toBe('develop');
+  });
+});
+
+describe('pushBranch', () => {
+  let remote: string;
+  beforeEach(() => {
+    remote = mkdtempSync(join(tmpdir(), 'orca-remote-'));
+    execFileSync('git', ['init', '-q', '--bare', remote]);
+    git(repo, 'remote', 'add', 'origin', remote);
+  });
+  afterEach(() => { rmSync(remote, { recursive: true, force: true }); });
+
+  it('re-pushes additional commits to an already-pushed branch (lease stays valid)', async () => {
+    const dir = join(repo, '..', `wt-${Date.now()}-p`);
+    await createMissionWorktree(repo, 'orca/feat-push', 'main', dir);
+    writeFileSync(join(dir, 'a.txt'), 'one\n'); await commitAll(dir, 'first');
+    expect(await pushBranch(dir, 'orca/feat-push', '')).toBe(true);   // initial push
+    writeFileSync(join(dir, 'b.txt'), 'two\n'); await commitAll(dir, 'second');
+    expect(await pushBranch(dir, 'orca/feat-push', '')).toBe(true);   // re-push must NOT 'stale info'
+    expect(git(remote, 'log', '--oneline', 'orca/feat-push')).toContain('second');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns false when the repo has no origin remote', async () => {
+    git(repo, 'remote', 'remove', 'origin');
+    const dir = join(repo, '..', `wt-${Date.now()}-n`);
+    await createMissionWorktree(repo, 'orca/feat-noremote', 'main', dir);
+    writeFileSync(join(dir, 'a.txt'), 'x\n'); await commitAll(dir, 'work');
+    expect(await pushBranch(dir, 'orca/feat-noremote', '')).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('pushes with a configured token without persisting it to the repo config', async () => {
+    const dir = join(repo, '..', `wt-${Date.now()}-t`);
+    await createMissionWorktree(repo, 'orca/feat-token', 'main', dir);
+    writeFileSync(join(dir, 'a.txt'), 'x\n'); await commitAll(dir, 'work');
+    expect(await pushBranch(dir, 'orca/feat-token', 'ghs_faketoken123')).toBe(true);
+    expect(git(remote, 'log', '--oneline', 'orca/feat-token')).toContain('work');
+    // The one-shot `-c http.extraHeader` is command-scoped — the token must never land in config.
+    expect(git(dir, 'config', '--local', '--list')).not.toContain('ghs_faketoken123');
+    rmSync(dir, { recursive: true, force: true });
   });
 });
