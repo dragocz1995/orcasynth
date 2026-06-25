@@ -55,6 +55,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "better-sqlite3": "^11.0.0",
     "hono": "^4.6.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
@@ -64,6 +65,7 @@
     "@next/eslint-plugin-next": "^16.2.9",
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
+    "@types/web-push": "^3.6.4",
     "dependency-cruiser": "^17.4.3",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",

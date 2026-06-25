@@ -25,6 +25,7 @@ import { createTicketStore } from '../terminal/ticketStore.js';
 import { RealTmuxDriver } from '../tmux/driver.js';
 import { SystemClock } from '../shared/clock.js';
 import { ConfigStore } from '../store/configStore.js';
+import { ensureVapidKeys } from '../push/vapid.js';
 import { UserStore } from '../store/userStore.js';
 import { EventStore } from '../store/eventStore.js';
 import { ProjectStore } from '../store/projectStore.js';
@@ -87,6 +88,7 @@ export function buildApp(opts: BuildOpts) {
   const tasks = new TaskStore(db); const agents = new AgentStore(db);
   const missions = new MissionStore(db); const readiness = new Readiness(db);
   const config = new ConfigStore(db);
+  ensureVapidKeys(config); // generate the web-push VAPID keypair on first boot (idempotent thereafter)
   const users = new UserStore(db);
   if (opts.bootstrap != null) {
     if (users.count() === 0) {

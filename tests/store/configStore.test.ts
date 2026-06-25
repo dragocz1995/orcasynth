@@ -29,6 +29,21 @@ describe('ConfigStore', () => {
     expect(cfg.apiKey()).toBe('k1');
     expect(cfg.get().autopilot.apiKeySet).toBe(true);
   });
+  it('exposes only the VAPID public key, never the private one', () => {
+    expect(cfg.get().webPush).toEqual({ publicKey: '', publicKeySet: false });
+    expect(cfg.webPushKeys()).toBeNull();
+
+    cfg.setWebPushKeys({ publicKey: 'pub-key', privateKey: 'priv-key' });
+    const c = cfg.get();
+    expect(c.webPush).toEqual({ publicKey: 'pub-key', publicKeySet: true });
+    expect(JSON.stringify(c)).not.toContain('priv-key');
+    expect(cfg.webPushKeys()).toEqual({ publicKey: 'pub-key', privateKey: 'priv-key' });
+  });
+  it('keeps the VAPID keypair across an unrelated config update', () => {
+    cfg.setWebPushKeys({ publicKey: 'pub', privateKey: 'priv' });
+    cfg.update({ autopilot: { model: 'x' } });
+    expect(cfg.webPushKeys()).toEqual({ publicKey: 'pub', privateKey: 'priv' });
+  });
   it('defaults include empty autopilot notes and launch defaults', () => {
     const c = cfg.get();
     expect(c.autopilot.notes).toBe('');

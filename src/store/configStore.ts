@@ -17,6 +17,9 @@ export interface OrcaConfig {
   /** When on, the hourly systemd timer (`orca update --auto`) upgrades to the latest npm release and
    *  restarts the services — but only while no mission is running. Off by default (opt-in). */
   autoUpdate: boolean;
+  /** Web Push VAPID public key (safe to expose) + whether a keypair has been generated. The private
+   *  key NEVER leaves the daemon — read it only via `webPushKeys()`. */
+  webPush: { publicKey: string; publicKeySet: boolean };
 }
 
 // Default executable name per agent program (resolveExecutor program ids). Derived from the shared
@@ -57,6 +60,7 @@ const DEFAULT_CONFIG: OrcaConfig = {
   defaults: { exec: 'sonnet', autonomy: 'L3', maxSessions: 1 },
   security: { tokenTtlDays: 30 },
   autoUpdate: false,
+  webPush: { publicKey: '', publicKeySet: false },
 };
 
 interface Stored {
@@ -71,6 +75,8 @@ interface Stored {
   defaults: { exec: string; autonomy: string; maxSessions: number };
   security: { tokenTtlDays: number };
   autoUpdate: boolean;
+  /** Persisted VAPID keypair; null until generated on first boot. Private key stays daemon-side. */
+  webPush: { publicKey: string; privateKey: string } | null;
 }
 
 const defaultStored = (): Stored => ({
@@ -85,6 +91,7 @@ const defaultStored = (): Stored => ({
   defaults: { ...DEFAULT_CONFIG.defaults },
   security: { ...DEFAULT_CONFIG.security },
   autoUpdate: false,
+  webPush: null,
 });
 
 export interface ConfigPatch {
@@ -125,6 +132,10 @@ export class ConfigStore {
         defaults: { exec: p.defaults?.exec ?? d.defaults.exec, autonomy: p.defaults?.autonomy ?? d.defaults.autonomy, maxSessions: p.defaults?.maxSessions ?? d.defaults.maxSessions },
         security: { tokenTtlDays: p.security?.tokenTtlDays ?? d.security.tokenTtlDays },
         autoUpdate: typeof p.autoUpdate === 'boolean' ? p.autoUpdate : d.autoUpdate,
+        // Both halves of the keypair must be non-empty strings, else treat as not-yet-generated.
+        webPush: (p.webPush && typeof p.webPush.publicKey === 'string' && p.webPush.publicKey.length > 0
+          && typeof p.webPush.privateKey === 'string' && p.webPush.privateKey.length > 0)
+          ? { publicKey: p.webPush.publicKey, privateKey: p.webPush.privateKey } : null,
       };
     } catch { return defaultStored(); } // corrupt row → defaults, never throw
   }
@@ -146,6 +157,8 @@ export class ConfigStore {
       defaults: s.defaults,
       security: s.security,
       autoUpdate: s.autoUpdate,
+      // Only the public key is exposed; `publicKeySet` reflects whether a full keypair exists.
+      webPush: { publicKey: s.webPush?.publicKey ?? '', publicKeySet: !!s.webPush },
     };
   }
 
@@ -154,6 +167,15 @@ export class ConfigStore {
   apiKey(): string | null { return this.read().apiKey; }
 
   ghToken(): string | null { return this.read().ghToken; }
+
+  /** The full VAPID keypair (private included) for the daemon-side push sender — never serialized to
+   *  any API response. Null until generated on first boot. */
+  webPushKeys(): { publicKey: string; privateKey: string } | null { return this.read().webPush; }
+
+  /** Persist a freshly generated VAPID keypair. */
+  setWebPushKeys(keys: { publicKey: string; privateKey: string }): void {
+    this.write({ ...this.read(), webPush: { publicKey: keys.publicKey, privateKey: keys.privateKey } });
+  }
 
   /** Whether a settings row has been persisted (i.e. config has been saved at least once). */
   hasSettings(): boolean {
@@ -184,6 +206,7 @@ export class ConfigStore {
       // Clamp to a sane positive integer — the value is interpolated into a SQL date modifier.
       security: { tokenTtlDays: clampTtlDays(patch.security?.tokenTtlDays, cur.security.tokenTtlDays) },
       autoUpdate: patch.autoUpdate ?? cur.autoUpdate,
+      webPush: cur.webPush, // VAPID keys are managed via setWebPushKeys, never through the config patch
     });
     return this.get();
   }
