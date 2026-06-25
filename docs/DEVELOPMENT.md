@@ -24,7 +24,7 @@ npm run build
 |---|---|
 | `npm run serve` | Run the daemon directly from TS via `--experimental-strip-types` (no build step). Starts on `http://localhost:4400`. |
 | `npm run build` | `tsc -p tsconfig.json` + copy `src/store/schema.sql` → `dist/store/` + copy `prompts/` → `dist/prompts/`. CLI ends up at `dist/cli/index.js`, daemon at `dist/daemon/index.js`. |
-| `npm test` | `vitest run` — single run of the daemon test suite (~823 cases) |
+| `npm test` | `vitest run` — single run of the daemon test suite (~833 cases) |
 | `npm run test:watch` | `vitest` — watch mode |
 | `npm run lint` | ESLint + dependency-cruiser architecture checks (no-circular, layer boundaries, orphans) |
 | `npm run deadcode` | `knip` — detect unused exports, files, and dependencies |
@@ -48,7 +48,7 @@ Or link globally: `npm link` then `orca ls`. The CLI auto-starts the daemon if i
 cd web
 npm install
 npm run dev      # Next.js dev server (turbopack)
-npm test         # Vitest (~433 cases)
+npm test         # Vitest (~445 cases)
 npm run lint     # ESLint + dependency-cruiser architecture checks
 npm run build    # Production build (copies Monaco workers, then next build)
 npm start        # Production server (default port 3000)
@@ -64,8 +64,8 @@ GitHub Actions runs on every push and PR to `main` (see [`.github/workflows/ci.y
 
 | Job | Steps |
 |-----|-------|
-| **Daemon** (823 tests) | `npm ci` → `npm run build` → `npm test` (tmux installed via apt) |
-| **Web** (433 tests) | `npm ci` → `npm run build` → `npm test` (in `web/`) |
+| **Daemon** (833 tests) | `npm ci` → `npm run build` → `npm test` (tmux installed via apt) |
+| **Web** (445 tests) | `npm ci` → `npm run build` → `npm test` (in `web/`) |
 
 Both jobs run in parallel on `ubuntu-latest` with Node 22. Superseded runs on the same ref are cancelled automatically.
 
@@ -210,8 +210,8 @@ src/
     ├── driver.ts     RealTmuxDriver
     └── fakeDriver.ts In-memory fake for tests
 prompts/              Prompt templates (planner, pilot, overseer, advisor, worker, decision)
-tests/                Mirrors src/ structure (~823 tests)
-web/                  Next.js frontend (~433 tests)
+tests/                Mirrors src/ structure (~833 tests)
+web/                  Next.js frontend (~445 tests)
 docs/                 Documentation tree
 ```
 

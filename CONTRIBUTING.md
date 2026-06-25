@@ -29,8 +29,8 @@ npm test
 
 ## Guidelines
 
-- **Tests required.** New behavior needs tests. Run `npm test` (daemon, ~649 tests) and
-  `cd web && npm test` (web, ~363 tests) before opening a PR; both suites and `tsc` must be green.
+- **Tests required.** New behavior needs tests. Run `npm test` (daemon, ~833 tests) and
+  `cd web && npm test` (web, ~445 tests) before opening a PR; both suites and `tsc` must be green.
 - **Keep it typed.** TypeScript strict mode, no `any`. No empty `catch` blocks.
 - **Root cause, not workarounds.** Fix the underlying issue; avoid dead code and duplication.
 - **Small, focused PRs.** One concern per PR with a clear description.

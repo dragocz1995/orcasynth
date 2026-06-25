@@ -102,6 +102,12 @@ The `decision.ts` module provides the safety layer for agent permission prompts.
 3. `gateVerdict()` applies the centralized `MIN_CONFIDENCE` (0.6) threshold — low-confidence approvals are auto-escalated
 4. For L1 autonomy, the stricter `STRICT_CONFIDENCE` threshold applies
 
+### Decision kinds
+
+The decision queue supports four kinds: `prompt` (permission gate), `review` (post-done phase review),
+`question` (multiple-choice question from the agent), and `task` (dispatch approval). Each is routed
+to the appropriate handler — `question` decisions let the overseer pick an option or escalate.
+
 ### Local destructive heuristic
 
 Before consulting the LLM, `isDestructive(text)` runs a hardcoded regex over `question + context`:

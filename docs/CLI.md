@@ -27,7 +27,7 @@ The CLI has two kinds of commands:
 | `ORCA_PLAN_JOB` | — | Plan job ID injected by daemon for Pilot agent (`orca plan submit`) |
 | `ORCA_MISSION` | — | Mission ID injected by daemon for Overseer agent (`orca overseer poll/decide`) |
 
-> **Note:** `ORCA_DB`, `ORCA_PORT`, `ORCA_PROJECT_PATH`, `ORCA_BOOTSTRAP_USER`, and `ORCA_BOOTSTRAP_PASS` are daemon-side environment variables — the CLI does not read them.
+> **Note:** `ORCA_DB`, `ORCA_PORT`, `ORCA_HOST`, `ORCA_PROJECT_PATH`, `ORCA_BOOTSTRAP_USER`, `ORCA_BOOTSTRAP_PASS`, and `ORCA_CLI` are daemon-side environment variables — the CLI does not read them.
 
 ## Commands
 
@@ -224,7 +224,7 @@ Stops the daemon and the web UI.
 Prints a one-glance block showing which services are running and healthy:
 
 ```
-  orcasynth v1.4.15
+  orcasynth v1.4.41
 
   daemon  ●  running  :4400  healthy
   web     ●  running  :4500  healthy  http://localhost:4500
