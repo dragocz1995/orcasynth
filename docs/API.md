@@ -1110,10 +1110,10 @@ escalations inbox when the overseer escalates to a human.
 
 **Response `200`**
 ```json
-{ "released": 2 }
+{ "released": ["task-id"] }
 ```
 
-`released` is the count of dependents unblocked by this approval.
+`released` is the array of task IDs unblocked by this approval.
 
 **Error `404`**
 ```json
