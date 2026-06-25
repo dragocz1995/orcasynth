@@ -2253,7 +2253,7 @@ can't trigger an update).
   "version": "1.4.33",
   "latest": "1.4.33",
   "updateAvailable": false,
-  "autoUpdate": { "enabled": true, "hour": 3 }
+  "autoUpdate": true
 }
 ```
 
@@ -2435,10 +2435,12 @@ exposed, only whether one is set.
 **Response `200`**
 ```json
 {
-  "authed": true,
-  "user": "dev",
-  "hasToken": false,
-  "ghCli": true
+  "ghInstalled": true,
+  "ghAuthenticated": true,
+  "account": "dev",
+  "tokenSet": false,
+  "ready": true,
+  "method": "gh"
 }
 ```
 
