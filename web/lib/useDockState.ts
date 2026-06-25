@@ -15,14 +15,17 @@ export interface DockState {
   side: 'left' | 'right';
   /** Panel width in px (desktop). */
   width: number;
-  /** Always holds the advisor pane plus any added session panes. */
+  /** Whether the advisor pane is shown. Off lets a user keep only their own terminal panes, with the
+   *  advisor re-addable from the "+" menu. */
+  advisor: boolean;
+  /** The advisor pane (when `advisor`) plus any added session panes. */
   panes: DockPane[];
   /** flex-grow weight per pane — kept the same length as `panes`. */
   sizes: number[];
 }
 
 const ADVISOR_PANE: DockPane = { id: 'advisor', kind: 'advisor' };
-const DEFAULT: DockState = { open: false, side: 'right', width: 560, panes: [ADVISOR_PANE], sizes: [1] };
+const DEFAULT: DockState = { open: false, side: 'right', width: 560, advisor: true, panes: [ADVISOR_PANE], sizes: [1] };
 
 const clampWidth = (w: number) =>
   Math.max(360, Math.min(w, (typeof window !== 'undefined' ? window.innerWidth : 1920) * 0.96));
@@ -32,18 +35,21 @@ function read(): DockState {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULT;
     const p = JSON.parse(raw) as Partial<DockState>;
-    // The advisor pane is implicit and must always lead the stack; rebuild from the stored session
-    // panes so a corrupt/legacy payload can never drop it or duplicate it.
+    // The advisor pane (when enabled) leads the stack; rebuild from the stored session panes so a
+    // corrupt/legacy payload can never duplicate or misorder them. Legacy payloads have no `advisor`
+    // flag → default it on so existing users keep their advisor.
+    const advisor = p.advisor !== false;
     const sessionPanes = (Array.isArray(p.panes) ? p.panes : [])
       .filter((x): x is DockPane => !!x && x.kind === 'session' && typeof x.name === 'string')
       .map((x) => ({ id: x.name!, kind: 'session' as const, name: x.name! }));
-    const panes = [ADVISOR_PANE, ...dedupeByName(sessionPanes)];
+    const panes = [...(advisor ? [ADVISOR_PANE] : []), ...dedupeByName(sessionPanes)];
     const storedSizes = Array.isArray(p.sizes) ? p.sizes.map(Number) : [];
     const sizes = panes.map((_, i) => (Number.isFinite(storedSizes[i]) && storedSizes[i]! > 0 ? storedSizes[i]! : 1));
     return {
       open: !!p.open,
       side: p.side === 'left' ? 'left' : 'right',
       width: clampWidth(Number(p.width ?? DEFAULT.width)),
+      advisor,
       panes,
       sizes,
     };
@@ -84,15 +90,23 @@ export function useDockState() {
 
   const removePane = useCallback((id: string) => update((s) => {
     const i = s.panes.findIndex((p) => p.id === id);
-    if (i < 0 || s.panes[i]!.kind === 'advisor') return s; // the advisor pane is permanent
+    if (i < 0) return s;
+    // Removing the advisor pane just hides it (it's re-addable from "+"); a session pane is dropped.
     return {
       ...s,
+      advisor: s.panes[i]!.kind === 'advisor' ? false : s.advisor,
       panes: s.panes.filter((_, idx) => idx !== i),
       sizes: s.sizes.filter((_, idx) => idx !== i),
     };
   }), [update]);
 
-  return { state, setOpen, setSide, setWidth, setSizes, addSessionPane, removePane };
+  // Bring the advisor pane back (idempotent), at the head of the stack where it belongs.
+  const addAdvisorPane = useCallback(() => update((s) => {
+    if (s.panes.some((p) => p.kind === 'advisor')) return s;
+    return { ...s, advisor: true, panes: [ADVISOR_PANE, ...s.panes], sizes: [1, ...s.sizes] };
+  }), [update]);
+
+  return { state, setOpen, setSide, setWidth, setSizes, addSessionPane, removePane, addAdvisorPane };
 }
 
 export type UseDockState = ReturnType<typeof useDockState>;

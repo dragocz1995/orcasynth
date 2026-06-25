@@ -20,14 +20,27 @@ describe('useDockState', () => {
     expect(result.current.state.panes).toHaveLength(2);
   });
 
-  it('never removes the advisor pane but does remove session panes', () => {
+  it('removes the advisor pane (re-addable later) and session panes', () => {
     const { result } = renderHook(() => useDockState());
     act(() => result.current.addSessionPane('orca-x'));
     act(() => result.current.removePane('advisor'));
-    expect(result.current.state.panes.some((p) => p.kind === 'advisor')).toBe(true);
+    expect(result.current.state.panes.some((p) => p.kind === 'advisor')).toBe(false);
+    expect(result.current.state.advisor).toBe(false);
     act(() => result.current.removePane('orca-x'));
-    expect(result.current.state.panes).toHaveLength(1);
-    expect(result.current.state.sizes).toHaveLength(1);
+    expect(result.current.state.panes).toHaveLength(0);
+    expect(result.current.state.sizes).toHaveLength(0);
+  });
+
+  it('re-adds the advisor pane at the head of the stack (idempotent)', () => {
+    const { result } = renderHook(() => useDockState());
+    act(() => result.current.addSessionPane('orca-x'));
+    act(() => result.current.removePane('advisor'));
+    act(() => result.current.addAdvisorPane());
+    expect(result.current.state.panes[0]).toEqual({ id: 'advisor', kind: 'advisor' });
+    expect(result.current.state.advisor).toBe(true);
+    expect(result.current.state.panes).toHaveLength(2);
+    act(() => result.current.addAdvisorPane()); // already present → no-op
+    expect(result.current.state.panes).toHaveLength(2);
   });
 
   it('persists the dock side across mounts', () => {

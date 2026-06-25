@@ -14,7 +14,7 @@ const MIN_WEIGHT = 0.12;
  *  on its inner edge and draggable dividers between stacked panes. */
 export function AdvisorPanel({ dock }: { dock: UseDockState }) {
   const { t } = useTranslation();
-  const { state, setOpen, setSide, setWidth, setSizes, addSessionPane, removePane } = dock;
+  const { state, setOpen, setSide, setWidth, setSizes, addSessionPane, removePane, addAdvisorPane } = dock;
   const stackRef = useRef<HTMLDivElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -72,6 +72,8 @@ export function AdvisorPanel({ dock }: { dock: UseDockState }) {
           <SessionPicker
             open={pickerOpen}
             exclude={excluded}
+            showAdvisor={!state.panes.some((p) => p.kind === 'advisor')}
+            onAddAdvisor={addAdvisorPane}
             onPick={(name) => addSessionPane(name)}
             onClose={() => setPickerOpen(false)}
           />
@@ -88,10 +90,15 @@ export function AdvisorPanel({ dock }: { dock: UseDockState }) {
       </div>
 
       <div ref={stackRef} className="flex min-h-0 flex-1 flex-col">
-        {state.panes.map((pane, i) => (
+        {state.panes.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1 p-6 text-center text-text-muted">
+            <p className="text-sm">{t.advisor.emptyDock}</p>
+            <p className="text-xs">{t.advisor.emptyDockHint}</p>
+          </div>
+        ) : state.panes.map((pane, i) => (
           <div key={pane.id} className="flex min-h-0 flex-col" style={{ flexGrow: state.sizes[i] ?? 1, flexBasis: 0 }}>
             <div className="min-h-0 flex-1">
-              <AdvisorPane pane={pane} onRemove={pane.kind === 'session' ? () => removePane(pane.id) : undefined} />
+              <AdvisorPane pane={pane} onRemove={() => removePane(pane.id)} />
             </div>
             {i < state.panes.length - 1 && (
               <ResizeHandle orientation="horizontal" onDelta={(dy) => onSplitDelta(i, dy)} className="w-full" />

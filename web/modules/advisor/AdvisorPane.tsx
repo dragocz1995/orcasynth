@@ -23,7 +23,7 @@ const Terminal = dynamic(() => import('../../components/terminal/StreamTerminal'
  *  agent picker) or a read-write terminal onto an arbitrary running session. */
 export function AdvisorPane({ pane, onRemove }: { pane: DockPane; onRemove?: () => void }) {
   if (pane.kind === 'session') return <SessionPane name={pane.name!} onRemove={onRemove} />;
-  return <AdvisorLifecyclePane />;
+  return <AdvisorLifecyclePane onRemove={onRemove} />;
 }
 
 /** Compact pane header: a leading node, a title, optional trailing controls. */
@@ -67,7 +67,7 @@ function SessionPane({ name, onRemove }: { name: string; onRemove?: () => void }
   );
 }
 
-function AdvisorLifecyclePane() {
+function AdvisorLifecyclePane({ onRemove }: { onRemove?: () => void }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const status = useAdvisorStatus();
@@ -139,6 +139,17 @@ function AdvisorLifecyclePane() {
               { label: t.advisor.stop, icon: Square, tone: 'danger', onSelect: doStop },
             ]}
           />
+        ) : null}
+        {onRemove ? (
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={t.advisor.removePane}
+            title={t.advisor.removePane}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-elevated hover:text-text"
+          >
+            <X size={16} aria-hidden />
+          </button>
         ) : null}
       </PaneHeader>
 

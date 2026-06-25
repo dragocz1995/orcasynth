@@ -13,13 +13,14 @@ vi.mock('../../../modules/advisor/SessionPicker', () => ({
 
 function fakeDock(over: Partial<UseDockState['state']> = {}): UseDockState {
   return {
-    state: { open: true, side: 'right', width: 560, panes: [{ id: 'advisor', kind: 'advisor' }], sizes: [1], ...over },
+    state: { open: true, side: 'right', width: 560, advisor: true, panes: [{ id: 'advisor', kind: 'advisor' }], sizes: [1], ...over },
     setOpen: vi.fn(),
     setSide: vi.fn(),
     setWidth: vi.fn(),
     setSizes: vi.fn(),
     addSessionPane: vi.fn(),
     removePane: vi.fn(),
+    addAdvisorPane: vi.fn(),
   };
 }
 

@@ -29,15 +29,17 @@ function renderPane(ui: React.ReactElement) {
 }
 
 describe('AdvisorPane', () => {
-  it('renders the advisor terminal when running, with no remove control', async () => {
+  it('renders the advisor terminal when running, with a remove control that fires onRemove', async () => {
+    const onRemove = vi.fn();
     server.use(
       ...baseHandlers,
       http.get('*/api/advisor/status', () => HttpResponse.json({ running: true, exec: 'sonnet', session: 'orca-advisor-1' })),
       http.get('*/api/sessions', () => HttpResponse.json([])),
     );
-    renderPane(<AdvisorPane pane={{ id: 'advisor', kind: 'advisor' }} onRemove={vi.fn()} />);
+    renderPane(<AdvisorPane pane={{ id: 'advisor', kind: 'advisor' }} onRemove={onRemove} />);
     expect((await screen.findByTestId('stream')).textContent).toBe('orca-advisor-1');
-    expect(screen.queryByRole('button', { name: /close panel|zavřít panel/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /close panel|zavřít panel/i }));
+    expect(onRemove).toHaveBeenCalled();
   });
 
   it('renders a session terminal with a remove control that fires onRemove', async () => {

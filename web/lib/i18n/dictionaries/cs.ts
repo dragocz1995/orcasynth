@@ -360,6 +360,9 @@ export const cs = {
     removePane: 'Zavřít panel',
     pickSession: 'Vyberte běžící session',
     noSessions: 'Žádné běžící session',
+    addAdvisor: 'Přidat asistenta',
+    emptyDock: 'Žádné panely',
+    emptyDockHint: 'Přidejte asistenta nebo session z nabídky „+“ nahoře.',
   },
   sessions: {
     needsInput: 'vyžaduje vstup',

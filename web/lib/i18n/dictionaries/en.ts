@@ -360,6 +360,9 @@ export const en = {
     removePane: 'Close panel',
     pickSession: 'Pick a running session',
     noSessions: 'No running sessions',
+    addAdvisor: 'Add assistant',
+    emptyDock: 'No panels',
+    emptyDockHint: 'Add the assistant or a session from the “+” menu above.',
   },
   sessions: {
     needsInput: 'needs input',
