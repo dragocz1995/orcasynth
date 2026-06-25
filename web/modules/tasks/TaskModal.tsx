@@ -98,6 +98,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
   })();
 
   // Planning fields
+  const [missionName, setMissionName] = useState(''); // optional short name → epic title (goal stays the brief)
   const [goal, setGoal] = useState('');
   // Seed lazily from config: a `useState(config…)` initializer runs once before the async config has
   // loaded and would freeze the fallback (L3 / 1) even when the saved default differs. The user's pick
@@ -164,7 +165,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
     setPlanError(null);
     try {
       // Autopilot planning is async: the endpoint returns a job; the effect renders it on done.
-      const r = await plan.mutateAsync({ goal: goal.trim(), exec: autoModel ? undefined : (exec || undefined), autoModel, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
+      const r = await plan.mutateAsync({ goal: goal.trim(), name: missionName.trim() || undefined, exec: autoModel ? undefined : (exec || undefined), autoModel, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
       if ('jobId' in r) setPlanJobId(r.jobId);
       else finishSync(r);
     } catch (e) {
@@ -179,7 +180,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
     const phases = manualPhases.map((p) => ({ title: p.title.trim(), type: p.type })).filter((p) => p.title);
     if (phases.length === 0) { toast(t.tasks.addAtLeastOnePhase, 'error'); return; }
     try {
-      const r = await plan.mutateAsync({ goal: goal.trim(), phases, exec: exec || undefined, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
+      const r = await plan.mutateAsync({ goal: goal.trim(), name: missionName.trim() || undefined, phases, exec: exec || undefined, autonomy, maxSessions, engage, project_id: projectId, prEnabled });
       if ('jobId' in r) setPlanJobId(r.jobId); else finishSync(r); // manual returns a PlanResult synchronously
     } catch (e) { toast(String(e), 'error'); }
   }
@@ -322,6 +323,9 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
 
         {!editing && mode === 'planning' && !result && (
           <>
+            <Field label={t.tasks.fieldMissionName} hint={t.tasks.missionNameHint}>
+              <Input value={missionName} onChange={(e) => setMissionName(e.target.value)} placeholder={t.tasks.missionNamePlaceholder} />
+            </Field>
             <Field label={t.tasks.fieldGoal} hint={t.tasks.goalHint}>
               <textarea
                 value={goal}

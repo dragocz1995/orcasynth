@@ -53,6 +53,24 @@ describe('async plan jobs (relay path)', () => {
     expect(agentNames).toContain('agent:claude'); // the first occurrence is honoured
   });
 
+  it('stamps the optional mission name on the epic title, keeping the full goal as the description', async () => {
+    const { app, token } = await makeTestApp({ fakePlan: '[{"title":"P","type":"task"}]', apiKey: 'k' });
+    const { epicId } = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'rebuild the whole onboarding flow with email verification', name: 'Onboarding v2' }) })).json() as { epicId: string };
+    const tasks = await (await app.request('/tasks', { headers: { authorization: `Bearer ${token}` } })).json() as { id: string; title: string; description: string }[];
+    const epic = tasks.find((t) => t.id === epicId)!;
+    expect(epic.title).toBe('Onboarding v2');                                                  // short name → title
+    expect(epic.description).toBe('rebuild the whole onboarding flow with email verification'); // full goal → description
+  });
+
+  it('falls back to the goal for the epic title when no mission name is given', async () => {
+    const { app, token } = await makeTestApp({ fakePlan: '[{"title":"P","type":"task"}]', apiKey: 'k' });
+    const { epicId } = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'just the goal', name: '   ' }) })).json() as { epicId: string };
+    const tasks = await (await app.request('/tasks', { headers: { authorization: `Bearer ${token}` } })).json() as { id: string; title: string; description: string }[];
+    const epic = tasks.find((t) => t.id === epicId)!;
+    expect(epic.title).toBe('just the goal');       // blank name → goal
+    expect(epic.description).toBe('just the goal');
+  });
+
   it('stamps a pr:off epic label when the task opts out of the PR workflow', async () => {
     const { app, token } = await makeTestApp({ fakePlan: '[{"title":"P","type":"task"}]', apiKey: 'k' });
     const { epicId } = await (await app.request('/tasks/plan', { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ goal: 'no PR please', prEnabled: false }) })).json() as { epicId: string };

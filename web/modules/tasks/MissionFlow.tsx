@@ -34,16 +34,24 @@ export function MissionFlow({ epic, phases, activeId, onSelectPhase }: {
 
   return (
     <div className="flex flex-col">
-      {/* Epic node — the mission root. */}
-      <div className="flex items-center gap-3 rounded-xl border border-accent/40 bg-accent/[0.06] p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-elevated">
-          <Rocket size={20} className="text-accent" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-text">{epic.title}</h2>
-          <span className="font-mono text-[11px] text-text-muted">{done}/{total} {t.tasks.phasesLabel}</span>
+      {/* Epic node — the mission root. The title carries the full mission goal (autopilot stores the whole
+       *  brief as the epic title), so it must wrap, not truncate — otherwise the assignment is cut off. */}
+      <div className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-accent/[0.06] p-3" style={{ boxShadow: 'var(--shadow-card)' }}>
+        <div className="flex items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border bg-elevated">
+            <Rocket size={20} className="text-accent" aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="whitespace-pre-wrap break-words text-sm font-semibold text-text">{epic.title}</h2>
+            <span className="font-mono text-[11px] text-text-muted">{done}/{total} {t.tasks.phasesLabel}</span>
+          </div>
+          <Badge tone={statusTone(epic.status)}>{statusLabel(t, epic.status)}</Badge>
         </div>
-        <Badge tone={statusTone(epic.status)}>{statusLabel(t, epic.status)}</Badge>
+        {/* A separate, fuller brief — only when it actually adds something over the title (a hand-written
+         *  epic with a distinct description). For autopilot missions title === description, so it's hidden. */}
+        {epic.description?.trim() && epic.description.trim() !== epic.title.trim() ? (
+          <p className="whitespace-pre-wrap break-words pl-[52px] text-sm leading-relaxed text-text-muted">{epic.description}</p>
+        ) : null}
       </div>
 
       {phases.map((phase, i) => {

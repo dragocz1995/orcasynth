@@ -544,7 +544,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       // A per-task PR override rides as a `pr:on`/`pr:off` epic label (missionGit reads it first, before
       // the project/global default). Only stamped on a fresh epic — a replan must never flip the mode.
       const prLabels = job.prEnabled === true ? ['pr:on'] : job.prEnabled === false ? ['pr:off'] : [];
-      epic = d.tasks.create({ id: epicId, project_id: job.projectId, title: job.goal, type: 'epic', description: job.goal, labels: prLabels });
+      // Title = the short mission name when given (else the goal, so it's never blank); the full goal
+      // always lands in the description. This is what lets the tasks UI show a tidy name + the full brief.
+      epic = d.tasks.create({ id: epicId, project_id: job.projectId, title: job.name?.trim() || job.goal, type: 'epic', description: job.goal, labels: prLabels });
       d.bus.publish({ type: 'task', taskId: epic.id, status: epic.status });
     }
     const existing = d.tasks.descendants(epic.id);
@@ -1067,8 +1069,9 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     return c.json({ ok: true, tasks: removed.tasks, missions: removed.missions, events });
   });
   app.post('/tasks/plan', async c => {
-    const b = await c.req.json() as { goal?: string; exec?: string; autoModel?: boolean; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title?: string; type?: string }[]; dryRun?: boolean; prompt?: string; project_id?: number; prEnabled?: boolean | null };
+    const b = await c.req.json() as { goal?: string; name?: string; exec?: string; autoModel?: boolean; autonomy?: string; maxSessions?: number; engage?: boolean; phases?: { title?: string; type?: string }[]; dryRun?: boolean; prompt?: string; project_id?: number; prEnabled?: boolean | null };
     const goal = (b.goal ?? '').trim();
+    const name = (b.name ?? '').trim(); // optional short mission name → epic title (goal stays the description)
     // Tri-state PR override: true (force on) / false (force off) / null|undefined (inherit project+global).
     const prEnabled = b.prEnabled === true ? true : b.prEnabled === false ? false : null;
     if (!goal) return c.json({ error: 'goal required' }, 400);
@@ -1082,7 +1085,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
       if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
       if (b.dryRun === true) return c.json({ phases }); // playground preview, nothing persisted
-      const job = planJobs.create({ goal, projectId: target.project.id, epicId: null, dryRun: false, exec: b.exec, prEnabled });
+      const job = planJobs.create({ goal, name, projectId: target.project.id, epicId: null, dryRun: false, exec: b.exec, prEnabled });
       job.phases = phases;
       const { epic, phases: created } = persistPlan(job);
       job.epicId = epic.id;
@@ -1095,7 +1098,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     // Autopilot mode: always async via a plan job — one path for the relay and the agent backends.
     const cfg = d.config.get();
     const job = planJobs.create({
-      goal, projectId: target.project.id, epicId: null, dryRun: b.dryRun === true,
+      goal, name, projectId: target.project.id, epicId: null, dryRun: b.dryRun === true,
       // Auto mode lets the planner pick a model per phase, so no uniform exec rides along.
       exec: b.autoModel ? undefined : b.exec, autoModel: b.autoModel === true,
       engage: b.engage === true ? { autonomy: b.autonomy ?? 'L3', maxSessions: b.maxSessions ?? 1 } : undefined,

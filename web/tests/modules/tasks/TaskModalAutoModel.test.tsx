@@ -26,7 +26,8 @@ describe('TaskModal — auto model toggle', () => {
     // Switch to autopilot planning mode (Segmented option).
     await waitFor(() => screen.getByText('Autopilot · Planning'));
     fireEvent.click(screen.getByText('Autopilot · Planning'));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'build x' } });
+    // Target the goal textarea by placeholder — the optional mission-name input is also a textbox.
+    fireEvent.change(screen.getByPlaceholderText('Describe the goal to plan…'), { target: { value: 'build x' } });
 
     // Planning mode shows three selects: autonomy + PR workflow + executor.
     expect(screen.getAllByRole('combobox')).toHaveLength(3);
