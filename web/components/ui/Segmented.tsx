@@ -3,9 +3,20 @@ import type { LucideIcon } from 'lucide-react';
 
 export interface SegmentedOption { value: string; label: string; icon?: LucideIcon }
 
-export function Segmented({ options, value, onChange }: { options: SegmentedOption[]; value: string; onChange: (value: string) => void }) {
+/** A connected segmented switch: one bordered track holding the options, the active one lifted with an
+ *  accent fill. Single source of truth for single-choice toggles (mode, filters, type, priority,
+ *  autonomy, PR workflow…). The track wraps when it can't fit, so long option sets degrade gracefully. */
+export function Segmented({ options, value, onChange, size = 'md', className }: {
+  options: SegmentedOption[];
+  value: string;
+  onChange: (value: string) => void;
+  /** `sm` for tight inline rows (e.g. a manual phase line), `md` for full form fields. */
+  size?: 'sm' | 'md';
+  className?: string;
+}) {
+  const pad = size === 'sm' ? 'px-2 py-1' : 'px-3 py-1.5';
   return (
-    <div role="radiogroup" className="flex flex-wrap gap-1.5">
+    <div role="radiogroup" className={`inline-flex max-w-full flex-wrap gap-0.5 rounded-md border border-border bg-surface p-0.5 ${className ?? ''}`}>
       {options.map((o) => {
         const active = o.value === value;
         const Icon = o.icon;
@@ -17,7 +28,7 @@ export function Segmented({ options, value, onChange }: { options: SegmentedOpti
             aria-checked={active}
             aria-label={o.label}
             onClick={() => onChange(o.value)}
-            className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ${active ? 'border-accent/50 bg-accent/15 text-accent' : 'border-border bg-elevated text-text-muted hover:border-border-strong hover:text-text'}`}
+            className={`inline-flex items-center gap-1.5 rounded text-xs font-medium transition-colors ${pad} ${active ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-elevated hover:text-text'}`}
             style={{ transitionDuration: 'var(--motion-fast)' }}
           >
             {Icon ? <Icon size={13} aria-hidden /> : null}

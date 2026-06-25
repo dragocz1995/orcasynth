@@ -14,7 +14,6 @@ import { Checkbox } from '../../components/ui/Checkbox';
 import { Toggle } from '../../components/ui/Toggle';
 import { Field } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
-import { PillSelect } from '../../components/ui/PillSelect';
 import { ExecutorPicker } from '../../components/ui/ExecutorPicker';
 import { IconButton } from '../../components/ui/IconButton';
 import { Badge } from '../../components/ui/Badge';
@@ -263,14 +262,14 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label={t.tasks.fieldType}>
-                <PillSelect
+                <Segmented
                   value={type}
                   onChange={setType}
                   options={TASK_TYPES.map((taskType) => ({ value: taskType, label: taskTypeLabel(t, taskType), icon: taskTypeMeta(taskType).icon }))}
                 />
               </Field>
               <Field label={t.tasks.fieldPriority}>
-                <PillSelect value={priority} onChange={setPriority} options={PRIORITIES.map((p) => ({ value: p, label: p }))} />
+                <Segmented value={priority} onChange={setPriority} options={PRIORITIES.map((p) => ({ value: p, label: p }))} />
               </Field>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -335,7 +334,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
             </Field>
             <div className="grid grid-cols-2 gap-4">
               <Field label={t.tasks.fieldAutonomy}>
-                <PillSelect value={autonomy} onChange={setAutonomy} options={['L0', 'L1', 'L2', 'L3'].map((l) => ({ value: l, label: l }))} />
+                <Segmented value={autonomy} onChange={setAutonomy} options={['L0', 'L1', 'L2', 'L3'].map((l) => ({ value: l, label: l }))} />
               </Field>
               <Field label={t.tasks.fieldMaxSessions}>
                 <Input type="number" min={1} value={maxSessions} onChange={(e) => setMaxSessions(Number(e.target.value))} />
@@ -345,9 +344,9 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
               <Toggle checked={autoModel} onChange={setAutoModel} label={t.tasks.autoModelLabel} />
             </Field>
             <Field label={t.tasks.fieldPrMode} hint={t.tasks.prModeHint}>
-              <PillSelect
+              <Segmented
                 value={prMode}
-                onChange={setPrMode}
+                onChange={(v) => setPrMode(v as 'default' | 'on' | 'off')}
                 options={[
                   { value: 'default', label: t.tasks.prModeDefault },
                   { value: 'on', label: t.tasks.prModeOn },
@@ -367,7 +366,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
                 {manualPhases.map((phase, i) => (
                   <div key={i} className="flex flex-wrap items-center gap-2">
                     <Input value={phase.title} placeholder={t.tasks.phasePlaceholder.replace('{n}', String(i + 1))} onChange={(e) => setManualPhases((rows) => rows.map((r, j) => j === i ? { ...r, title: e.target.value } : r))} className="min-w-[12rem] flex-1" />
-                    <PillSelect
+                    <Segmented
                       size="sm"
                       value={phase.type}
                       onChange={(v) => setManualPhases((rows) => rows.map((r, j) => j === i ? { ...r, type: v } : r))}

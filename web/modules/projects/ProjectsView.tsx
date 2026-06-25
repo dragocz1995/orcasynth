@@ -9,6 +9,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Field } from '../../components/ui/Field';
+import { Segmented } from '../../components/ui/Segmented';
 import { Modal, ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
@@ -260,22 +261,15 @@ export function ProjectsView() {
               <textarea value={editNotes} onChange={(e) => setEditNotes(e.target.value)} rows={4} className="w-full resize-none rounded-md border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-accent focus:outline-none" />
             </Field>
             <Field label={t.projects.prFlowLabel} hint={t.projects.prFlowHint}>
-              <div className="inline-flex rounded-md border border-border bg-surface p-0.5">
-                {([{ v: null, label: t.projects.prFlowInherit }, { v: true, label: t.projects.prFlowOn }, { v: false, label: t.projects.prFlowOff }] as { v: boolean | null; label: string }[]).map(({ v, label }) => {
-                  const on = editPrEnabled === v;
-                  return (
-                    <button
-                      key={String(v)}
-                      type="button"
-                      onClick={() => setEditPrEnabled(v)}
-                      aria-pressed={on}
-                      className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${on ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text'}`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
+              <Segmented
+                value={editPrEnabled === null ? 'default' : editPrEnabled ? 'on' : 'off'}
+                onChange={(v) => setEditPrEnabled(v === 'default' ? null : v === 'on')}
+                options={[
+                  { value: 'default', label: t.projects.prFlowInherit },
+                  { value: 'on', label: t.projects.prFlowOn },
+                  { value: 'off', label: t.projects.prFlowOff },
+                ]}
+              />
             </Field>
           </ModalBody>
           <ModalFooter>

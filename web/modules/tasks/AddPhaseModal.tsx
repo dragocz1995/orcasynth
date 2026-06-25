@@ -9,7 +9,6 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Field } from '../../components/ui/Field';
 import { Segmented } from '../../components/ui/Segmented';
-import { PillSelect } from '../../components/ui/PillSelect';
 import { ExecutorPicker } from '../../components/ui/ExecutorPicker';
 import { IconButton } from '../../components/ui/IconButton';
 import { useToast } from '../../components/ui/Toast';
@@ -84,7 +83,7 @@ export function AddPhaseModal({ epicId, onClose }: { epicId: string; onClose: ()
                   onChange={(e) => setRows((rs) => rs.map((r, j) => j === i ? { ...r, title: e.target.value } : r))}
                   className="min-w-[12rem] flex-1"
                 />
-                <PillSelect
+                <Segmented
                   size="sm"
                   value={row.type}
                   onChange={(v) => setRows((rs) => rs.map((r, j) => j === i ? { ...r, type: v } : r))}
