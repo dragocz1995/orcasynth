@@ -35,6 +35,14 @@ export function nginxVhost(domain: string, webPort: number, daemonPort: number):
         proxy_read_timeout 3600s;
     }
 
+    # The service worker must never be cached, or a stale sw.js keeps running and push breaks. Exact
+    # match wins over the catch-all below, so only /sw.js is forced no-cache.
+    location = /sw.js {
+        proxy_pass http://127.0.0.1:${webPort};
+        proxy_set_header Host $host;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+    }
+
     location / {
         proxy_pass http://127.0.0.1:${webPort};
         proxy_http_version 1.1;

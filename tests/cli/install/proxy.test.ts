@@ -39,6 +39,13 @@ describe('install/proxy vhost renderers', () => {
     // /ws/ must be declared before the catch-all / so nginx prefix-matches it first.
     expect(v.indexOf('location /ws/ {')).toBeLessThan(v.indexOf('location / {'));
   });
+  it('nginx vhost forces no-cache on /sw.js (exact match) so the service worker never goes stale', () => {
+    const v = nginxVhost('orca.example.com', 4500, 4400);
+    expect(v).toContain('location = /sw.js {');
+    expect(v).toMatch(/Cache-Control "no-cache, no-store, must-revalidate"/);
+    // The exact /sw.js match must precede the catch-all / so it wins.
+    expect(v.indexOf('location = /sw.js {')).toBeLessThan(v.indexOf('location / {'));
+  });
   it('apache vhost reverse-proxies with preserved host', () => {
     const v = apacheVhost('orca.example.com', 4500);
     expect(v).toContain('ServerName orca.example.com');
