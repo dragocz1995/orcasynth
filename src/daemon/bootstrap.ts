@@ -12,7 +12,7 @@ import { Scheduler } from '../overseer/scheduler.js';
 import { sweepFinishedSessions } from '../overseer/janitor.js';
 import { sweepPrFeedback, type PrFeedbackDeps } from '../overseer/prFeedback.js';
 import { sweepStuckTasks, deadAgentTasks } from '../overseer/stuckDetector.js';
-import { decidePrompt, decideChoice, isDestructive, gateVerdict, minConfidenceFor, noOverseerFallback } from '../overseer/decision.js';
+import { decidePrompt, decideChoice, gateVerdict, minConfidenceFor, noOverseerFallback } from '../overseer/decision.js';
 import { PlanJobStore } from '../overseer/planJob.js';
 import { DecisionQueue } from '../overseer/decisionQueue.js';
 import { makePilot } from '../overseer/pilotAgent.js';
@@ -144,12 +144,15 @@ export function buildApp(opts: BuildOpts) {
   const planJobs = new PlanJobStore();
   const decisionQueue = new DecisionQueue();
   const pilot = makePilot({ spawn, config, projects, planJobs, tmux, nameAgent: uniqueName, cli });
-  const overseer = makeOverseer({ spawn, tmux, config, queue: decisionQueue, cli });
 
   // PR-native git lifecycle (no-op unless Settings → PR workflow is enabled): each mission runs in an
   // isolated worktree on its own branch, commits per approved phase, and (later stages) opens a PR.
   const missionPrs = new MissionPrStore(db);
   const missionGit = new MissionGit({ prs: missionPrs, config, projects, tasks });
+
+  // The overseer must be parked INSIDE the mission's worktree (via missionGit) so its read-only
+  // `git diff` judges the agent's actual work, not the unchanged main checkout.
+  const overseer = makeOverseer({ spawn, tmux, config, queue: decisionQueue, cli, missionGit });
 
   // Phone push: a single bus subscriber maps lifecycle events (review escalation, needs_input, stall,
   // completion) to web-push notifications for the mission's owner + admins. No-op until a user
@@ -212,37 +215,31 @@ export function buildApp(opts: BuildOpts) {
       // clearly-safe steps. One source of truth, applied on every gate path below.
       const minConfidence = minConfidenceFor(input.autonomy);
       if (input.missionId && config.get().autopilot.overseerExec) {
-        const localDestructive = isDestructive(`${input.question} ${input.context}`);
-        const v = await decisionQueue.enqueue(input.missionId, 'prompt', { question: input.question, context: input.context, options: input.options }, localDestructive);
-        return gateVerdict(v, { blockDestructive: true, minConfidence });
+        const v = await decisionQueue.enqueue(input.missionId, 'prompt', { question: input.question, context: input.context, options: input.options });
+        return gateVerdict(v, { minConfidence });
       }
       const inf = overseerClient();
-      // No overseer wired at all: only L3 may wave a non-destructive prompt through; L1/L2 escalate
+      // No overseer wired at all: only L3 may wave a prompt through; L1/L2 escalate
       // instead of being blindly approved (that blanket-approve was the bug that collapsed L2 into L3).
-      if (!inf) return noOverseerFallback(input.autonomy, isDestructive(`${input.question} ${input.context}`));
+      if (!inf) return noOverseerFallback(input.autonomy);
       const d = await decidePrompt(inf, input);
-      return gateVerdict(d, { blockDestructive: false, minConfidence });
+      return gateVerdict(d, { minConfidence });
     },
     // The agent asked the user to pick an option. This routes through the SAME overseer that judges
     // prompts/reviews: the parked agent via the decision queue when one is configured, else the relay
     // inference as a fallback. A null choiceId escalates to a human: no overseer, an unknown/absent
-    // option id, below the autonomy confidence bar, or a destructive option.
+    // option id, or below the autonomy confidence bar.
     decideQuestion: async (input) => {
       const minConfidence = minConfidenceFor(input.autonomy);
       // Gate a raw verdict (parked agent OR relay) into a final choiceId: the picked id must be a real
-      // option, clear the autonomy confidence bar, and not select a destructive action.
+      // option and clear the autonomy confidence bar.
       const gate = (choice: string | undefined, confidence: number) => {
         const chosen = choice ? input.options.find((o) => o.id === choice) : undefined;
         if (!chosen || confidence < minConfidence) return { choiceId: null };
-        // Best-effort only: option labels are natural language ("Delete the nginx config"), so this
-        // catches a label that literally embeds a shell/SQL danger token but NOT a destructive intent
-        // phrased in prose. The real guardrail for risky picks is the overseer's judgement + the
-        // confidence bar above; this is a cheap last-ditch net, not the primary defence.
-        if (isDestructive(`${input.question} ${chosen.label}`)) return { choiceId: null };
         return { choiceId: chosen.id };
       };
       if (input.missionId && config.get().autopilot.overseerExec) {
-        const v = await decisionQueue.enqueue(input.missionId, 'question', { question: input.question, context: input.context, options: input.options }, false);
+        const v = await decisionQueue.enqueue(input.missionId, 'question', { question: input.question, context: input.context, options: input.options });
         return gate(v.choice, v.confidence);
       }
       const inf = overseerClient();

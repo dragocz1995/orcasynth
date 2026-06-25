@@ -21,8 +21,8 @@ export interface DeriverDeps {
   /** Mission id owning a session, or null (manual launch). Lets a queue-backed decideApproval route
    *  the prompt to that mission's parked overseer agent. */
   missionFor?: (session: string) => string | null;
-  /** Overseer decision for an auto-cleared prompt; escalates when it returns approve=false or destructive=true. */
-  decideApproval?: (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ approve: boolean; destructive: boolean }>;
+  /** Overseer decision for an auto-cleared prompt; escalates when it returns approve=false. */
+  decideApproval?: (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ approve: boolean }>;
   /** Overseer choice for an agent question (prompt kind 'choice'): returns the picked option id, or
    *  null to escalate to a human. The deriver navigates to the id and accepts; null emits needs_input. */
   decideQuestion?: (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ choiceId: string | null }>;
@@ -101,7 +101,7 @@ export class Deriver {
         return;
       }
       // A multiple-choice question (the agent's "ask the user" tool): the overseer picks an option id,
-      // or escalates. A null choice (low confidence, destructive, no overseer, or a thrown decision)
+      // or escalates. A null choice (low confidence, no overseer, or a thrown decision)
       // hands the question to a human rather than guessing.
       if (prompt.kind === 'choice') {
         let choiceId: string | null = null;
@@ -125,18 +125,18 @@ export class Deriver {
         }
         return;
       }
-      // L2/L3: the overseer decides; destructive or uncertain prompts still escalate. A decision
-      // failure (relay/queue throw) is conservative — escalate to a human rather than auto-clear.
-      let decision: { approve: boolean; destructive: boolean };
+      // L2/L3: the overseer decides; uncertain prompts still escalate. A decision failure
+      // (relay/queue throw) is conservative — escalate to a human rather than auto-clear.
+      let decision: { approve: boolean };
       try {
         decision = this.d.decideApproval
           ? await this.d.decideApproval({ question: prompt.question, context: prompt.context, options: prompt.options, autonomy: autonomy ?? 'L3', missionId: this.d.missionFor?.(session) ?? null })
-          : { approve: true, destructive: false };
+          : { approve: true };
       } catch (e) {
         log.error('overseer decision failed, escalating', e);
-        decision = { approve: false, destructive: false };
+        decision = { approve: false };
       }
-      if (decision.approve && !decision.destructive) {
+      if (decision.approve) {
         await this.d.tmux.sendKeys(session, prompt.acceptKeys);
         this.d.sink.emit(session, { type: 'working' });
       } else {

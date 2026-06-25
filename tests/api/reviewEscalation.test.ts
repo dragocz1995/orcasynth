@@ -18,7 +18,7 @@ describe('review escalation + self-heal', () => {
     const poll = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req = await poll;
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, destructive: false, rationale: 'looks good' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, rationale: 'looks good' });
     await new Promise((r) => setTimeout(r, 30));
     const review = events.find((e) => e.type === 'review');
     expect(review).toMatchObject({ type: 'review', taskId: childId, approve: true, rationale: 'looks good' });
@@ -41,7 +41,7 @@ describe('review escalation + self-heal', () => {
     expect(req!.context).toHaveProperty('diff');
     expect(req!.context).toHaveProperty('diffTruncated');
     // Resolve so the pending review doesn't dangle into the next test.
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, destructive: false, rationale: 'ok' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, rationale: 'ok' });
   });
 
   it('publishes a review event with approve=false and the rationale on escalation', async () => {
@@ -53,7 +53,7 @@ describe('review escalation + self-heal', () => {
     const poll = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req = await poll;
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'scope creep' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'scope creep' });
     await new Promise((r) => setTimeout(r, 30));
     const review = events.find((e) => e.type === 'review');
     expect(review).toMatchObject({ type: 'review', taskId: childId, approve: false, rationale: 'scope creep' });
@@ -66,7 +66,7 @@ describe('review escalation + self-heal', () => {
     const poll = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req = await poll;
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'missing tests' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'missing tests' });
     await new Promise((r) => setTimeout(r, 40)); // verdict .then() re-opens + ticks (re-spawn)
     const phase = t.deps.tasks.get(childId)!;
     expect(phase.status).toBe('in_progress'); // re-spawned to fix
@@ -83,7 +83,7 @@ describe('review escalation + self-heal', () => {
     const poll1 = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req1 = await poll1;
-    t.deps.decisionQueue.resolve(missionId, req1!.id, { approve: false, confidence: 0, destructive: false, rationale: 'fix it' });
+    t.deps.decisionQueue.resolve(missionId, req1!.id, { approve: false, confidence: 0, rationale: 'fix it' });
     await new Promise((r) => setTimeout(r, 40));
     expect(t.deps.tasks.get(childId)!.status).toBe('in_progress'); // re-spawned to fix
     expect(t.deps.tasks.get(nextId)!.status).toBe('blocked'); // dependent still gated
@@ -94,7 +94,7 @@ describe('review escalation + self-heal', () => {
     const req2 = await poll2;
     expect(req2?.kind).toBe('review'); // the fixed phase is reviewed again, not silently accepted
     // Approve the fix → the gated dependent is released and spawned (mission advances, no strand).
-    t.deps.decisionQueue.resolve(missionId, req2!.id, { approve: true, confidence: 0.9, destructive: false, rationale: 'good' });
+    t.deps.decisionQueue.resolve(missionId, req2!.id, { approve: true, confidence: 0.9, rationale: 'good' });
     await new Promise((r) => setTimeout(r, 40));
     expect(t.deps.tasks.get(nextId)!.status).toBe('in_progress'); // released — the mission did NOT hang
   });
@@ -108,7 +108,7 @@ describe('review escalation + self-heal', () => {
     const poll = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req = await poll;
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'still wrong' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'still wrong' });
     await new Promise((r) => setTimeout(r, 40));
     expect(t.deps.tasks.get(childId)!.status).toBe('closed'); // NOT re-spawned — budget spent
     expect(t.deps.tasks.get(nextId)!.status).toBe('blocked'); // halted for a human
@@ -150,7 +150,7 @@ describe('review escalation + self-heal', () => {
     const poll = t.deps.decisionQueue.next(missionId, 2000);
     await closePhase(t, t.token, childId);
     const req = await poll;
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'nope' });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'nope' });
     await new Promise((r) => setTimeout(r, 40));
     expect(t.deps.tasks.get(childId)!.status).toBe('closed'); // human-in-the-loop: no auto re-spawn
     expect(t.deps.tasks.get(nextId)!.status).toBe('blocked');
@@ -166,7 +166,7 @@ describe('review escalation + self-heal', () => {
     // The overseer never answered: the queue's timeout produces this shape (`escalated: true`). Even on
     // L3 (which self-heals real rejects) this must NOT re-open the phase — that synthetic-reject reopen
     // was the infinite livelock. It stays closed and waits for a human instead.
-    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'overseer timeout', escalated: true });
+    t.deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'overseer timeout', escalated: true });
     await new Promise((r) => setTimeout(r, 40));
     expect(t.deps.tasks.get(childId)!.status).toBe('closed'); // NOT re-spawned despite L3
     expect(t.deps.tasks.get(childId)!.labels.some((l) => l.startsWith('reviewfix:'))).toBe(false); // self-heal budget not burned

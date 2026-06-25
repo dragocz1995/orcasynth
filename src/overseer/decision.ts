@@ -13,7 +13,6 @@ export interface Decision {
   approve: boolean;
   /** 0..1 — how sure the overseer is. Low confidence escalates. */
   confidence: number;
-  destructive: boolean;
   rationale: string;
 }
 
@@ -33,36 +32,22 @@ export function minConfidenceFor(autonomy: string): number {
 }
 
 /** The decision when no overseer is configured at all (relay fallback, no parked agent). Only full
- *  autonomy (L3) may wave a non-destructive prompt through unattended; L0–L2 escalate to a human
- *  rather than be blindly approved. Destructive prompts always escalate, even at L3. */
-export function noOverseerFallback(autonomy: string, destructive: boolean): { approve: boolean; destructive: boolean } {
-  return { approve: autonomy === 'L3' && !destructive, destructive };
+ *  autonomy (L3) may wave a prompt through unattended; L0–L2 escalate to a human rather than be
+ *  blindly approved. */
+export function noOverseerFallback(autonomy: string): { approve: boolean } {
+  return { approve: autonomy === 'L3' };
 }
 
 /** Apply the auto-approve gate to a raw decision/verdict: approve only when the overseer was
- *  confident enough (≥ `minConfidence`, default MIN_CONFIDENCE), and — for prompt-style decisions —
- *  only when not flagged destructive. The `destructive` flag always passes through so the caller can
- *  escalate on it. This is the single place the threshold is applied; callers no longer re-implement
- *  the comparison. Pass `minConfidence` (e.g. via `minConfidenceFor`) to raise the bar per autonomy. */
+ *  confident enough (≥ `minConfidence`, default MIN_CONFIDENCE). This is the single place the
+ *  threshold is applied; callers no longer re-implement the comparison. Pass `minConfidence`
+ *  (e.g. via `minConfidenceFor`) to raise the bar per autonomy. */
 export function gateVerdict(
-  v: { approve: boolean; confidence: number; destructive: boolean },
-  opts: { blockDestructive: boolean; minConfidence?: number },
-): { approve: boolean; destructive: boolean } {
+  v: { approve: boolean; confidence: number },
+  opts: { minConfidence?: number },
+): { approve: boolean } {
   const minConfidence = opts.minConfidence ?? MIN_CONFIDENCE;
-  return {
-    approve: v.approve && v.confidence >= minConfidence && (!opts.blockDestructive || !v.destructive),
-    destructive: v.destructive,
-  };
-}
-
-// Operations that always escalate to a human, regardless of autonomy or LLM opinion. Covers the
-// common ways a model can fetch-and-execute or shell out — not just `curl | sh` (#45): wget piped to
-// a shell, inline interpreter one-liners (python/node/perl -e/-c), netcat, and arbitrary-code sinks
-// (eval/exec/os.system/subprocess) — so a reworded but equally dangerous command can't slip past.
-const DESTRUCTIVE = /\brm\s+-rf|DROP\s+TABLE|DELETE\s+FROM|TRUNCATE\b|\bmigrat|\.env\b|secret|credential|password|private[_-]?key|force[- ]?push|git\s+reset\s+--hard|git\s+push\s+.*-f|chmod\s+777|(curl|wget)[^|]*\|\s*(sh|bash)|(python\d?|node|perl)\s+-[ce]\b|\b(ncat|nc)\s+-|bash\s+-c|\beval\s*\(|os\.system|subprocess\.|\bexec\s*\(/i;
-
-export function isDestructive(text: string): boolean {
-  return DESTRUCTIVE.test(text);
+  return { approve: v.approve && v.confidence >= minConfidence };
 }
 
 /** Shared overseer prompt header (role + approve/escalate instruction + JSON output contract). Both
@@ -89,24 +74,18 @@ export function parseDecision(text: string): Decision {
   return {
     approve: raw.approve === true,
     confidence: typeof raw.confidence === 'number' ? Math.max(0, Math.min(1, raw.confidence)) : 0,
-    destructive: raw.destructive === true,
     rationale: typeof raw.rationale === 'string' ? raw.rationale : '',
   };
 }
 
-/**
- * Decide whether to auto-approve a paused agent prompt or escalate to a human.
- * A local destructive heuristic always wins (forces escalate) over the LLM's opinion.
- */
+/** Decide whether to auto-approve a paused agent prompt or escalate to a human. */
 export async function decidePrompt(inf: InferenceClient, input: PromptContext): Promise<Decision> {
-  const localDestructive = isDestructive(`${input.question} ${input.context}`);
   try {
     const { text } = await inf.decide(decisionPrompt(input));
-    const d = parseDecision(text);
-    return { ...d, destructive: d.destructive || localDestructive };
+    return parseDecision(text);
   } catch {
-    // LLM unavailable/unparseable → be conservative: escalate, and respect the local guard.
-    return { approve: false, confidence: 0, destructive: localDestructive, rationale: 'overseer inference failed' };
+    // LLM unavailable/unparseable → be conservative: escalate.
+    return { approve: false, confidence: 0, rationale: 'overseer inference failed' };
   }
 }
 

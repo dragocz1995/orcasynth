@@ -24,7 +24,7 @@ function setup(autonomy: string | null = null, decideApproval?: DeriverDecider, 
   });
   return { tmux, deriver, emitted };
 }
-type DeriverDecider = (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ approve: boolean; destructive: boolean }>;
+type DeriverDecider = (input: { question: string; context: string; options: { id: string; label: string }[]; autonomy: string; missionId: string | null }) => Promise<{ approve: boolean }>;
 
 describe('Deriver permission handling', () => {
   it('L3 / manual: sends Enter once and emits working (dedup on repeat)', async () => {
@@ -43,21 +43,21 @@ describe('Deriver permission handling', () => {
   });
 
   it('L0: never auto-clears — escalates even when an (approving) overseer is wired', async () => {
-    const { tmux, deriver, emitted } = setup('L0', async () => ({ approve: true, destructive: false }));
+    const { tmux, deriver, emitted } = setup('L0', async () => ({ approve: true }));
     await deriver.tick();
     expect(tmux.sentKeys('orca-TestAgent')).toEqual([]); // L0 = recommend only, nothing runs
     expect(emitted.at(-1)!.sig.type).toBe('needs_input');
   });
 
   it('L1: routes the prompt through the overseer and clears it when approved', async () => {
-    const { tmux, deriver, emitted } = setup('L1', async () => ({ approve: true, destructive: false }));
+    const { tmux, deriver, emitted } = setup('L1', async () => ({ approve: true }));
     await deriver.tick();
     expect(tmux.sentKeys('orca-TestAgent')).toEqual([['Enter']]); // Assist auto-runs clearly-safe steps
     expect(emitted.at(-1)!.sig.type).toBe('working');
   });
 
   it('L1: escalates when the overseer declines (e.g. below the stricter threshold)', async () => {
-    const { tmux, deriver, emitted } = setup('L1', async () => ({ approve: false, destructive: false }));
+    const { tmux, deriver, emitted } = setup('L1', async () => ({ approve: false }));
     await deriver.tick();
     expect(tmux.sentKeys('orca-TestAgent')).toEqual([]);
     expect(emitted.at(-1)!.sig.type).toBe('needs_input');
@@ -65,22 +65,22 @@ describe('Deriver permission handling', () => {
 
   it('passes the L1 autonomy level into decideApproval so the overseer can apply its stricter gate', async () => {
     let seen = 'unset';
-    const { deriver } = setup('L1', async (input) => { seen = input.autonomy; return { approve: false, destructive: false }; });
+    const { deriver } = setup('L1', async (input) => { seen = input.autonomy; return { approve: false }; });
     await deriver.tick();
     expect(seen).toBe('L1');
   });
 
   it('L3 with overseer: approves a safe prompt (presses Enter)', async () => {
-    const { tmux, deriver, emitted } = setup('L3', async () => ({ approve: true, destructive: false }));
+    const { tmux, deriver, emitted } = setup('L3', async () => ({ approve: true }));
     await deriver.tick();
     expect(tmux.sentKeys('orca-TestAgent')).toEqual([['Enter']]);
     expect(emitted.at(-1)!.sig.type).toBe('working');
   });
 
-  it('L3 with overseer: escalates a destructive prompt instead of pressing Enter', async () => {
-    const { tmux, deriver, emitted } = setup('L3', async () => ({ approve: true, destructive: true }));
+  it('L3 with overseer: escalates when the overseer declines instead of pressing Enter', async () => {
+    const { tmux, deriver, emitted } = setup('L3', async () => ({ approve: false }));
     await deriver.tick();
-    expect(tmux.sentKeys('orca-TestAgent')).toEqual([]); // destructive → no auto-press
+    expect(tmux.sentKeys('orca-TestAgent')).toEqual([]); // reject → no auto-press
     expect(emitted.at(-1)!.sig.type).toBe('needs_input');
   });
 
@@ -95,7 +95,7 @@ describe('Deriver permission handling', () => {
     const deriver = new Deriver({
       tmux, agents, tasks, sink: { emit: () => {} }, sessionTaskId: () => 'orca-1',
       autonomyFor: () => 'L3',
-      decideApproval: async () => { consulted = true; return { approve: false, destructive: true }; },
+      decideApproval: async () => { consulted = true; return { approve: false }; },
     });
     await deriver.tick();
     expect(tmux.sentKeys('orca-Nova')).toEqual([['Enter']]); // cleared despite a reject verdict
@@ -121,7 +121,7 @@ describe('Deriver permission handling', () => {
 
   it('passes the session mission id into decideApproval', async () => {
     let seen: string | null = 'unset';
-    const { deriver } = setup('L3', async (input) => { seen = input.missionId; return { approve: true, destructive: false }; }, () => 'm-ep');
+    const { deriver } = setup('L3', async (input) => { seen = input.missionId; return { approve: true }; }, () => 'm-ep');
     await deriver.tick();
     expect(seen).toBe('m-ep');
   });

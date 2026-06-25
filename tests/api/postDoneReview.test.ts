@@ -30,7 +30,7 @@ describe('post-done review', () => {
     await app.request(`/tasks/${childId}`, { method: 'PATCH', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ status: 'closed', outcome: 'ok', result_summary: 'done' }) });
     const req = await poll;
     expect(deps.tasks.get(nextId)!.status).toBe('blocked'); // gated while the review is pending
-    deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, destructive: false, rationale: 'looks good' });
+    deps.decisionQueue.resolve(missionId, req!.id, { approve: true, confidence: 0.9, rationale: 'looks good' });
     await new Promise((r) => setTimeout(r, 30)); // let the verdict .then() release + tick spawn P2
     expect(deps.tasks.get(nextId)!.status).toBe('in_progress'); // released and spawned — the gate opened
   });
@@ -43,7 +43,7 @@ describe('post-done review', () => {
     await app.request(`/tasks/${childId}`, { method: 'PATCH', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify({ status: 'closed', outcome: 'ok', result_summary: 'sketchy' }) });
     const req = await poll;
     // Overseer rejects → the next phase (P2, which depends on P1) must be blocked.
-    deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, destructive: false, rationale: 'bad result' });
+    deps.decisionQueue.resolve(missionId, req!.id, { approve: false, confidence: 0, rationale: 'bad result' });
     await new Promise((r) => setTimeout(r, 20)); // let the .then() run
     expect(deps.tasks.get(nextId)!.status).toBe('blocked');
   });

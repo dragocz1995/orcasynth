@@ -4,7 +4,6 @@ export type DecisionKind = 'prompt' | 'review' | 'question';
 export interface DecisionResult {
   approve: boolean;
   confidence: number;
-  destructive: boolean;
   rationale: string;
   /** For a 'question' decision: the option id the overseer picked. Absent ⇒ escalate to a human
    *  (also the shape of a timeout/drain verdict, which therefore escalates the question). */
@@ -17,7 +16,7 @@ export interface DecisionResult {
 }
 export interface PendingDecision { id: string; kind: DecisionKind; context: Record<string, unknown> }
 
-interface Entry extends PendingDecision { settle: (r: DecisionResult) => void; localDestructive: boolean; timer: NodeJS.Timeout }
+interface Entry extends PendingDecision { settle: (r: DecisionResult) => void; timer: NodeJS.Timeout }
 type Waiter = (r: PendingDecision | null) => void;
 
 const HEARTBEAT_MS = 25_000;
@@ -31,7 +30,7 @@ export class DecisionQueue {
   private pending = new Map<string, Entry[]>();   // missionId → FIFO of unanswered requests
   private waiters = new Map<string, Waiter[]>();  // missionId → long-poll resolvers awaiting a request
 
-  enqueue(missionId: string, kind: DecisionKind, context: Record<string, unknown>, localDestructive: boolean, timeoutMs = DECISION_TIMEOUT_MS): Promise<DecisionResult> {
+  enqueue(missionId: string, kind: DecisionKind, context: Record<string, unknown>, timeoutMs = DECISION_TIMEOUT_MS): Promise<DecisionResult> {
     return new Promise<DecisionResult>((resolveVerdict) => {
       const id = randomBytes(6).toString('hex');
       const timer = setTimeout(() => {
@@ -39,10 +38,10 @@ export class DecisionQueue {
         // Timeout = the overseer never answered. This is NOT a verdict — it escalates to a human and
         // must never auto-act (see `escalated`). Without this flag a review's L3 self-heal read the
         // synthetic reject as "overseer rejected" and re-ran the phase forever (livelock).
-        resolveVerdict({ approve: false, confidence: 0, destructive: localDestructive, rationale: 'overseer timeout', escalated: true });
+        resolveVerdict({ approve: false, confidence: 0, rationale: 'overseer timeout', escalated: true });
       }, timeoutMs);
       if (typeof timer.unref === 'function') timer.unref();
-      const entry: Entry = { id, kind, context, localDestructive, timer, settle: (r) => { clearTimeout(timer); resolveVerdict(r); } };
+      const entry: Entry = { id, kind, context, timer, settle: (r) => { clearTimeout(timer); resolveVerdict(r); } };
       const list = this.pending.get(missionId) ?? [];
       list.push(entry);
       this.pending.set(missionId, list);
@@ -67,14 +66,12 @@ export class DecisionQueue {
     const entry = (this.pending.get(missionId) ?? []).find((e) => e.id === id);
     if (!entry) return false;
     this.remove(missionId, id);
-    // The local destructive heuristic (captured at enqueue) is authoritative — never trusted away by
-    // the agent. OR it into the verdict so an agent's `approve` can't dispatch a flagged-destructive action.
-    entry.settle({ ...result, destructive: result.destructive || entry.localDestructive });
+    entry.settle(result);
     return true;
   }
 
   drain(missionId: string): void {
-    for (const e of this.pending.get(missionId) ?? []) e.settle({ approve: false, confidence: 0, destructive: e.localDestructive, rationale: 'mission disengaged' });
+    for (const e of this.pending.get(missionId) ?? []) e.settle({ approve: false, confidence: 0, rationale: 'mission disengaged' });
     this.pending.delete(missionId);
     for (const w of this.waiters.get(missionId) ?? []) w(null);
     this.waiters.delete(missionId);

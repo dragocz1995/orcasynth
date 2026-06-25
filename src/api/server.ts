@@ -26,7 +26,6 @@ import type { AgentSpec } from '../spawn/commandBuilder.js';
 import { resolveExecutor } from '../overseer/routing.js';
 import { decompose, parsePhases, modelsBlock, VALID_TYPES as VALID_PHASE_TYPES, type Phase } from '../overseer/planner.js';
 import { classifySession } from '../overseer/sessionInfo.js';
-import { isDestructive } from '../overseer/decision.js';
 import { buildReviewContext } from '../overseer/reviewContext.js';
 import { PlanJobStore, type PlanJob } from '../overseer/planJob.js';
 import { DecisionQueue } from '../overseer/decisionQueue.js';
@@ -914,7 +913,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
       // Post-done review (opt-in): when a mission phase closes, let the parked overseer judge the
       // outcome before the next phase may run. This is a HARD sequential gate — the phase's direct
       // dependents are blocked synchronously at close (so the engine tick can't spawn them mid-review),
-      // and only an approving verdict releases them. A reject/destructive verdict leaves them blocked,
+      // and only an approving verdict releases them. A reject verdict leaves them blocked,
       // so a bad result halts the mission for a human instead of rolling on. Default off, and only
       // active with an agent overseer configured.
       const cfg = d.config.get();
@@ -950,7 +949,6 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
           // resurrect a just-finished phase into an orphaned, mission-less 'open' state. Skip it.
           if (gated.length > 0) {
             reviewEnqueued = true;
-            const localDestructive = isDestructive(`${existing.title} ${b.result_summary ?? ''}`);
             // Hand the overseer the REAL evidence — the working-tree changes — not just the agent's
             // self-reported summary, so the review judges the diff instead of rubber-stamping. Workers
             // don't commit, so `git diff HEAD` is the phase's actual change set. In PR-native mode the
@@ -960,14 +958,14 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
             const reviewPath = d.missionGit?.worktreeFor(mission.id) ?? d.projects?.get(existing.project_id)?.path ?? d.project.path;
             const { changedFiles, diff } = await projectReviewDiff(reviewPath);
             const reviewCtx = buildReviewContext({ title: existing.title, outcome: b.outcome ?? '', summary: b.result_summary ?? '', changedFiles, diff });
-            void decisionQueue.enqueue(mission.id, 'review', reviewCtx, localDestructive)
+            void decisionQueue.enqueue(mission.id, 'review', reviewCtx)
               .then(async (verdict) => {
                 // The mission may have torn down while the review was pending (manual disengage, shutdown):
                 // the drain settles the queue with a synthetic reject. Never apply a verdict to a dead
                 // mission — releasing or self-healing it would only orphan tasks under a mission that's gone.
                 const live = d.missions.get(mission.id);
                 if (!live || (live.state !== 'active' && live.state !== 'stalled')) return;
-                const approved = verdict.approve && !verdict.destructive;
+                const approved = verdict.approve;
                 // Surface the verdict to the UI/timeline — otherwise the rationale dies in the overseer
                 // pane and the user only sees an unexplained 'blocked'/'stalled'.
                 d.bus.publish({ type: 'review', missionId: mission.id, taskId: id, approve: approved, rationale: verdict.rationale });
@@ -1513,7 +1511,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
   // Overseer long-poll: the parked per-mission overseer agent polls `next` (blocks until a decision
   // is needed or a heartbeat) and answers via `decide`. Decisions are keyed by mission id in the
   // path; both sit behind the bearer middleware. No model output is parsed — the agent posts a
-  // structured verdict, and the local destructive heuristic stays authoritative (applied at enqueue).
+  // structured verdict.
   // Gate the overseer routes by the mission's OWN project (not the daemon home project the GATED
   // middleware checks) so a cross-project user can't read/answer another tenant's decisions. A
   // non-existent mission id has nothing to leak, so it falls through (harmless heartbeat / no-op).
@@ -1537,7 +1535,6 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const ok = decisionQueue.resolve(id, b.id, {
       approve: b.approve === true,
       confidence: typeof b.confidence === 'number' ? Math.max(0, Math.min(1, b.confidence)) : 0,
-      destructive: false, // never trusted from the agent — the enqueue-time heuristic is authoritative
       rationale: typeof b.rationale === 'string' ? b.rationale : '',
       // For a 'question' decision: the picked option id. Absent ⇒ the deriver escalates to a human.
       ...(typeof b.choice === 'string' ? { choice: b.choice } : {}),
