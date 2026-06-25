@@ -60,6 +60,9 @@ ORCA_LOG_DIR=$PWD/logs        # log directory
 # VAPID keys for web push notifications — auto-generated on first boot and persisted
 # in the config store (no env var). The private key never leaves the daemon.
 
+# CLI binary path (set by the daemon or systemd unit; falls back to `node dist/cli/index.js`)
+ORCA_CLI=orca
+
 # Agent-injected (set by the daemon on spawned agent env, not by the operator)
 # ORCA_PLAN_JOB=<jobId>       # Pilot agent
 # ORCA_MISSION=<missionId>    # Overseer agent
@@ -242,6 +245,7 @@ Notes:
 | `ORCA_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `ORCA_LOG_DIR` | `cwd/logs` | Log directory |
 | `HERMES_HOME` | `~/.hermes` | Hermes root for same-host MCP registration |
+| `ORCA_CLI` | `orca` | CLI binary path (set by daemon/systemd; falls back to `node dist/cli/index.js`) |
 | `ORCA_DAEMON_URL` | `http://localhost:4400` | Daemon URL for the web BFF proxy (server-side only) |
 
 ### Runtime config

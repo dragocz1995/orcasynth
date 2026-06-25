@@ -137,13 +137,13 @@ The agent path is fully async — the engine/deriver enqueues a decision and awa
 
 ### DecisionQueue
 
-Per-mission FIFO in `src/overseer/decisionQueue.ts` with three decision kinds:
+Per-mission FIFO in `src/overseer/decisionQueue.ts` with four decision kinds:
 
 | Kind | Enqueued by | Context |
-|---|---|---|
 | `task` | Mission engine tick | Task title, description, labels |
 | `prompt` | Deriver | Permission prompt question, context, options |
 | `review` | PATCH close handler (post-done) | Task title, outcome, summary |
+| `question` | Deriver | Multiple-choice question with options |
 
 Every enqueued decision is **guaranteed to settle**: by the agent, by a 120s timeout (conservative escalate), or by `drain()` when the mission disengages (all pending decisions escalate).
 

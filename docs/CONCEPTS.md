@@ -534,6 +534,7 @@ The build copies `prompts/` into `dist/prompts/`. Templates are cached after fir
 | `worker-epic-close.md` | Final phase: also closes parent epic | — |
 | `decision-header.md` | Shared overseer decision header | — |
 | `decision-prompt.md` | Overseer prompt-gate decision body | — |
+| `decision-question.md` | Overseer multiple-choice question body | `{{autonomy}}`, `{{question}}`, `{{context}}`, `{{options}}` |
 
 
 ## LLM JSON extraction

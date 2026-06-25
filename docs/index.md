@@ -116,6 +116,7 @@ All LLM prompts are stored as Markdown templates under `prompts/` and rendered a
 | `worker-epic-close.md` | Final-phase agent: also closes parent epic | — |
 | `decision-header.md` | Shared overseer decision header | — |
 | `decision-prompt.md` | Overseer prompt-gate decision body | — |
+| `decision-question.md` | Overseer multiple-choice question body | `{{autonomy}}`, `{{question}}`, `{{context}}`, `{{options}}` |
 
 
 ## Timer loops
@@ -141,14 +142,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for module details.
 # Daemon
 npm install && npm run build        # compile TS → dist/, copy schema.sql + prompts/
 npm run serve                       # dev mode (direct TS via --experimental-strip-types)
-npm test                            # daemon tests (~649)
+npm test                            # daemon tests (~833)
 npm run lint                        # ESLint + dependency-cruiser architecture checks
 node dist/daemon/index.js           # production start
 
 # Web
 cd web && npm install
 npm run dev                         # Next.js dev server (turbopack)
-npm test                            # web tests (~433)
+npm test                            # web tests (~445)
 npm run build && npm start          # production
 ```
 

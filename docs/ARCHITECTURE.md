@@ -69,7 +69,7 @@ The agent works in the tmux pane, then calls `node <cli> close <taskId> …` bac
 
 ### `src/api/` — REST API (Hono)
 
-- `server.ts` — route definitions (1,616 lines, 91 routes in one file): tasks, missions, sessions, projects, users, auth, config, integrations, file editor, git surface, planner, plan jobs, overseer decision routes, web push subscriptions, usage stats, system info, advisor, MCP, activity log, events SSE
+- `server.ts` — route definitions (1,616 lines, 89 routes in one file): tasks, missions, sessions, projects, users, auth, config, integrations, file editor, git surface, planner, plan jobs, overseer decision routes, web push subscriptions, usage stats, system info, advisor, MCP, activity log, events SSE
 - `sse.ts` — `EventBus` for real-time SSE notifications (terminal output, task state changes, plan job status)
 - `auth.ts` — Bearer token middleware, also accepts `?token=` query param for SSE. `/ws/terminal` is public here — the terminal-WS ticket is its capability
 
@@ -200,7 +200,7 @@ Phone push notifications deliver mission events (review escalation, `needs_input
 - `index.ts` — `render(name, vars)` loads `.md` templates and substitutes `{{placeholder}}` variables; `rawTemplate()` for the editable planner default; templates cache until `_resetPromptCache()`
 
 Templates live in the repo-root `prompts/` directory (copied to `dist/prompts/` during build):
-`planner.md`, `planner-fallback.md`, `pilot.md`, `overseer.md`, `worker.md`, `worker-phase.md`, `worker-epic-close.md`, `decision-header.md`, `decision-prompt.md`, `decision-question.md`, `advisor.md`
+`planner.md`, `planner-fallback.md`, `pilot.md`, `overseer.md`, `advisor.md`, `worker.md`, `worker-phase.md`, `worker-epic-close.md`, `decision-header.md`, `decision-prompt.md`, `decision-question.md`
 
 ## Autonomy levels
 
@@ -303,4 +303,4 @@ Tests use Vitest with fake implementations:
 
 This allows full integration-style tests without real tmux or network dependencies.
 
-Daemon tests: ~832 `it`/`test` cases across 108 test files in `tests/`. Web tests: ~445 cases in 103 test files in `web/tests/` (Vitest + React Testing Library).
+Daemon tests: ~833 `it`/`test` cases across 108 test files in `tests/`. Web tests: ~445 cases in 103 test files in `web/tests/` (Vitest + React Testing Library).

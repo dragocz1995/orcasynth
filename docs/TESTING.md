@@ -2,7 +2,7 @@
 
 ## Running tests
 
-### Daemon tests (~823 cases, 108 files)
+### Daemon tests (~833 cases, 108 files)
 
 ```bash
 # All tests
@@ -18,7 +18,7 @@ npx vitest tests/store/taskStore.test.ts
 npx vitest --coverage
 ```
 
-### Web frontend tests (~433 cases, 102 files)
+### Web frontend tests (~445 cases, 103 files)
 
 ```bash
 cd web
@@ -169,7 +169,7 @@ GitHub Actions runs on every push and PR to `main` (see [`.github/workflows/ci.y
 
 | Job | Commands | Notes |
 |-----|----------|-------|
-| **Daemon** (823 tests) | `npm ci` → `npm run build` → `npm test` | tmux installed via `apt` for the real driver test |
-| **Web** (433 tests) | `npm ci` → `npm run build` → `npm test` | runs in `web/` subdirectory |
+| **Daemon** (833 tests) | `npm ci` → `npm run build` → `npm test` | tmux installed via `apt` for the real driver test |
+| **Web** (445 tests) | `npm ci` → `npm run build` → `npm test` | runs in `web/` subdirectory |
 
 Both jobs run in parallel on `ubuntu-latest` with Node 22. Superseded runs on the same ref are cancelled automatically.

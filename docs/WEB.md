@@ -657,7 +657,7 @@ npm install
 npm run dev          # Next.js dev server (turbopack)
 npm run build        # production build (next build)
 npm start -- -p 4500 # production server (next start, port 4500)
-npm test             # Vitest (~433 cases, RTL + MSW)
+npm test             # Vitest (~445 cases, RTL + MSW)
 npm run test:watch   # watch mode
 ```
 
@@ -667,7 +667,7 @@ The web app talks only to its own same-origin `/api` BFF proxy (`lib/orcaClient.
 
 ### Test setup
 
-Tests in `web/tests/` (~363 cases) use:
+Tests in `web/tests/` (~445 cases) use:
 - **Vitest** — test runner
 - **MSW** — API mocking
 - **Testing Library** — component rendering and interaction
