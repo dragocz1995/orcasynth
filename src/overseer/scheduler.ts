@@ -5,6 +5,7 @@ import type { AgentSpec } from '../spawn/commandBuilder.js';
 import type { Clock } from '../shared/clock.js';
 import { KeyedMutex } from '../shared/keyedMutex.js';
 import { resolveExecutor } from './routing.js';
+import { parseResumeLabel } from '../spawn/resume/index.js';
 import { projectHead } from '../integrations/projectFiles.js';
 import { checkoutBusy, checkoutOf } from './checkout.js';
 import { logger } from '../shared/logger.js';
@@ -70,6 +71,7 @@ export class Scheduler {
             projectId: project.id, projectPath: cwd, taskId: task.id,
             agentName, spec, taskTitle: task.title, taskDescription: task.description,
             epicId: task.parent_id ?? undefined,
+            resume: parseResumeLabel(task.labels),
           });
         } catch (e) {
           // Spawn failed (tmux down, bin missing): roll back so the schedule isn't silently lost (O9).

@@ -43,6 +43,32 @@ describe('UsageRecorder', () => {
     expect(usage.aggregateByExec()).toEqual([]);
   });
 
+  it('stamps the resume label from the detected CLI session on close', () => {
+    const usage = new TaskUsageStore(openDb(':memory:'));
+    const bus = new EventBus();
+    const stamped: { id: string; program: string; sessionId: string }[] = [];
+    const tasks = { get: () => task(), list: () => [task()], setResumeLabel: (id: string, program: string, sessionId: string) => stamped.push({ id, program, sessionId }) };
+    new UsageRecorder({
+      usage, tasks: tasks as never, pathFor: () => '/p', fallback: { program: 'claude-code', model: 'sonnet' },
+      read: () => fakeUsage, detect: () => ({ program: 'claude-code', sessionId: 'sess-42' }),
+    }).subscribe(bus);
+    bus.publish({ type: 'task', taskId: 't1', status: 'closed' });
+    expect(stamped).toEqual([{ id: 't1', program: 'claude-code', sessionId: 'sess-42' }]);
+  });
+
+  it('stamps the resume label even when usage parsing finds nothing (session still resumable)', () => {
+    const usage = new TaskUsageStore(openDb(':memory:'));
+    const bus = new EventBus();
+    const stamped: string[] = [];
+    const tasks = { get: () => task(), list: () => [task()], setResumeLabel: (_id: string, _p: string, sessionId: string) => stamped.push(sessionId) };
+    new UsageRecorder({
+      usage, tasks: tasks as never, pathFor: () => '/p', fallback: { program: 'claude-code', model: 'sonnet' },
+      read: () => null, detect: () => ({ program: 'codex', sessionId: 'cx-1' }),
+    }).subscribe(bus);
+    bus.publish({ type: 'task', taskId: 't1', status: 'closed' });
+    expect(stamped).toEqual(['cx-1']); // captured despite usage being null
+  });
+
   it('never lets a reader error abort the bus broadcast', () => {
     const usage = new TaskUsageStore(openDb(':memory:'));
     const bus = new EventBus();

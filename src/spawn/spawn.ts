@@ -1,6 +1,7 @@
 import type { TmuxDriver } from '../tmux/types.js';
 import type { AgentStore } from '../store/agentStore.js';
 import { buildAgentCommand, type AgentSpec } from './commandBuilder.js';
+import type { PendingResume } from './resume/index.js';
 import { logger } from '../shared/logger.js';
 
 const log = logger('spawn');
@@ -8,14 +9,14 @@ const log = logger('spawn');
 /** How a spawned agent reaches back to the daemon to close its task. `cli` is the full orca
  *  invocation: the global `orca` command in production, or `node <dist/cli/index.js>` in a checkout. */
 export interface OrcaCliConfig { cli: string; url: string; token: string }
-/** Per-program binary override + extra args + permission-bypass toggle (configured in Settings →
- *  Providers). `skipPermissions` defaults to true at the config layer; undefined here means "use the
- *  built-in default" (bypass on). */
-export type ProviderResolver = (program: string) => { bin?: string; args?: string; skipPermissions?: boolean } | undefined;
+/** Per-program binary override + extra args + permission-bypass toggle + resume toggle (configured in
+ *  Settings → Providers). `skipPermissions` and `resume` default to true at the config layer;
+ *  undefined here means "use the built-in default" (bypass on / resume on). */
+export type ProviderResolver = (program: string) => { bin?: string; args?: string; skipPermissions?: boolean; resume?: boolean } | undefined;
 
 export class SpawnService {
   constructor(private d: { tmux: TmuxDriver; agents: AgentStore; orca?: OrcaCliConfig; providers?: ProviderResolver }) {}
-  async launch(input: { projectId: number; projectPath: string; taskId: string; agentName: string; spec: AgentSpec; taskTitle?: string; taskDescription?: string; epicId?: string; extraEnv?: Record<string, string>; rawPrompt?: string }): Promise<{ session: string }> {
+  async launch(input: { projectId: number; projectPath: string; taskId: string; agentName: string; spec: AgentSpec; taskTitle?: string; taskDescription?: string; epicId?: string; extraEnv?: Record<string, string>; rawPrompt?: string; resume?: PendingResume }): Promise<{ session: string }> {
     this.d.agents.upsert({ project_id: input.projectId, name: input.agentName, program: input.spec.program, model: input.spec.model });
     const session = `orca-${input.agentName}`;
     const orca = this.d.orca;
@@ -30,11 +31,17 @@ export class SpawnService {
     // of the daemon-reach env. extraEnv alone still flows through when no orca config is present.
     const env = orca ? { ORCA_URL: orca.url, ORCA_TOKEN: orca.token, ...input.extraEnv } : input.extraEnv;
     const provider = this.d.providers?.(input.spec.program);
+    // Resume only when the recorded session is for THIS spawn's program (the operator may have
+    // switched the task's exec since) and the provider hasn't disabled resume. Otherwise cold start.
+    const normalizedProgram = input.spec.program.startsWith('opencode') ? 'opencode' : input.spec.program;
+    const resume = input.resume && input.resume.program === normalizedProgram && provider?.resume !== false
+      ? input.resume : undefined;
+    if (resume) log.info(`resuming ${resume.program} session ${resume.sessionId} for task ${input.taskId}`);
     const command = buildAgentCommand(input.spec, {
       projectPath: input.projectPath, taskId: input.taskId, agentName: input.agentName,
       taskTitle: input.taskTitle, taskDescription: input.taskDescription,
       closeCommand, epicId: input.epicId, epicCloseCommand, cli, env, bin: provider?.bin, extraArgs: provider?.args,
-      skipPermissions: provider?.skipPermissions, rawPrompt: input.rawPrompt,
+      skipPermissions: provider?.skipPermissions, rawPrompt: input.rawPrompt, resume,
     });
     await this.d.tmux.spawn(session, { cwd: input.projectPath, command });
     // Explicit spawn record: captures pilot/overseer launches too (they have no task row, so the

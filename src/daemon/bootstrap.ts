@@ -37,6 +37,7 @@ import { UserProjectStore } from '../store/userProjectStore.js';
 import { PushSubscriptionStore } from '../store/pushSubscriptionStore.js';
 import { TaskUsageStore } from '../store/taskUsageStore.js';
 import { UsageRecorder } from '../integrations/usage/recorder.js';
+import { captureResumeLabel } from '../integrations/usage/resumeCapture.js';
 import { usagePath } from '../integrations/usage/usagePath.js';
 import { RealGitReader } from '../git/gitReader.js';
 import type { TmuxDriver } from '../tmux/types.js';
@@ -164,11 +165,12 @@ export function buildApp(opts: BuildOpts) {
   new PushDispatcher({ missions, tasks, users, sender: pushSender, missionGit }).subscribe(bus);
   // Snapshot each task's token/cost usage into task_usage as it settles, so the stats page reads
   // DB aggregates instead of re-scanning the CLIs' session stores. Resolve the same path the live
-  // usage endpoint does (mission worktree under PR-native, else the project checkout).
-  new UsageRecorder({
-    usage: taskUsage, tasks, fallback: { program: 'claude-code', model: 'sonnet' },
-    pathFor: (task) => usagePath(task, (pid) => projects.get(pid)?.path ?? opts.project.path, (id) => missionGit?.worktreeFor(id)),
-  }).subscribe(bus);
+  // usage endpoint does (mission worktree under PR-native, else the project checkout). The same
+  // path + fallback also drive resume-session capture (shared with the stuck detector below).
+  const usagePathFor = (task: { project_id: number; parent_id: string | null }) =>
+    usagePath(task, (pid) => projects.get(pid)?.path ?? opts.project.path, (id) => missionGit?.worktreeFor(id));
+  const resumeFallback = { program: 'claude-code', model: 'sonnet' };
+  new UsageRecorder({ usage: taskUsage, tasks, fallback: resumeFallback, pathFor: usagePathFor }).subscribe(bus);
 
   // One shared per-checkout git lock across the scheduler, mission engine and API server, so a phase's
   // commit+snapshot at close never interleaves with another agent's baseline read on the same checkout.
@@ -328,7 +330,9 @@ export function buildApp(opts: BuildOpts) {
     // dead session; revert it so the mission re-spawns (bounded), else escalate. 2-min grace
     // covers the spawn→session window; relaunch at most twice before escalating to a human.
     const stopStuck = clock.setInterval(() => {
-      void sweepStuckTasks({ tmux, tasks, bus, now: clock.now(), graceMs: 120000, maxRelaunch: 2 })
+      void sweepStuckTasks({ tmux, tasks, bus, now: clock.now(), graceMs: 120000, maxRelaunch: 2,
+        // Stamp the dead agent's session for resume so the relaunch continues it (best-effort).
+        onReap: (t) => { try { captureResumeLabel({ tasks, pathFor: usagePathFor, fallback: resumeFallback }, t); } catch (e) { log.warn(`resume capture failed for stuck task ${t.id}`, e); } } })
         .then(({ reverted, escalated }) => {
           if (reverted.length) log.warn(`stuck detector reverted ${reverted.length} dead-agent task(s) to open: ${reverted.join(', ')}`);
           if (escalated.length) log.error(`stuck detector escalated ${escalated.length} task(s) to blocked after max relaunches: ${escalated.join(', ')}`);

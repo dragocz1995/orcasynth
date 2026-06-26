@@ -71,6 +71,23 @@ describe('sweepStuckTasks', () => {
     expect(r.reverted).toEqual([]);
     expect(r.escalated).toEqual([]);
   });
+
+  it('invokes onReap with the dead task before reverting (for resume capture)', async () => {
+    const { tasks, tmux, bus, start } = setup();
+    start('t1', 'Ghost', NOW - 300_000);
+    const reaped: string[] = [];
+    const r = await sweepStuckTasks({ tmux, tasks, bus, now: NOW, graceMs: 120_000, maxRelaunch: 2, onReap: (t) => reaped.push(t.id) });
+    expect(reaped).toEqual(['t1']);
+    expect(r.reverted).toEqual(['t1']);
+  });
+
+  it('reaps the task even if onReap throws (resume capture is best-effort)', async () => {
+    const { tasks, tmux, bus, start } = setup();
+    start('t1', 'Ghost', NOW - 300_000);
+    const r = await sweepStuckTasks({ tmux, tasks, bus, now: NOW, graceMs: 120_000, maxRelaunch: 2, onReap: () => { throw new Error('boom'); } });
+    expect(r.reverted).toEqual(['t1']); // revert still happened despite the capture error
+    expect(tasks.get('t1')!.status).toBe('open');
+  });
 });
 
 describe('sweepStuckTasks created_at fallback (#54)', () => {

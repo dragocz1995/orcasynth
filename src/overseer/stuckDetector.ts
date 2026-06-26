@@ -32,6 +32,10 @@ export interface StuckDetectorDeps {
   graceMs: number;
   /** After this many dead-agent reverts, escalate (set `blocked`) instead of relaunching. */
   maxRelaunch: number;
+  /** Stamp the dead agent's CLI session as the task's resume label before it's re-picked, so the
+   *  relaunch resumes that session (its crashed-but-persisted context) instead of cold-starting.
+   *  Optional — omitted in tests that don't exercise resume. */
+  onReap?: (task: Task) => void;
 }
 
 /**
@@ -47,6 +51,9 @@ export async function sweepStuckTasks(d: StuckDetectorDeps): Promise<{ reverted:
   for (const t of deadAgentTasks(live, d.tasks.list({ status: 'in_progress' }))) {
     const started = startedOf(t);
     if (started != null && d.now - started < d.graceMs) continue; // freshly spawned — not stuck
+    // Capture the dead agent's session for resume before re-picking it — the crash left a partial
+    // session on disk that still carries useful context. Guarded so a capture error can't block reaping.
+    try { d.onReap?.(t); } catch { /* resume is best-effort; never block the reap */ }
     // `stuck:<n>` counts total relaunches of this task instance. We never reset it: a child runs
     // to completion once, so the only thing it bounds is how many times we re-spawn a dying agent
     // before handing it to a human. This guarantees a flaky task always escalates eventually

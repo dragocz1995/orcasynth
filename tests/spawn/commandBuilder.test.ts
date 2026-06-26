@@ -108,4 +108,43 @@ describe('buildAgentCommand', () => {
     expect(cmd).not.toContain('orca close'); // no close-command preamble for reasoning agents
     expect(cmd).not.toContain('1200000 ms'); // reasoning agents bypass the worker preamble
   });
+
+  describe('resume', () => {
+    it('claude resumes with --resume after the bypass flag, before --model, and a continuation prompt', () => {
+      const cmd = buildAgentCommand(
+        { program: 'claude-code', model: 'sonnet' },
+        { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'claude-code', sessionId: 'sess-7' } },
+      );
+      expect(cmd).toContain("--dangerously-skip-permissions --resume 'sess-7' --model 'sonnet'");
+      expect(cmd).toContain('resuming your earlier session'); // worker-resume preamble, not the full worker one
+      expect(cmd).not.toContain('First read the project context'); // the cold-start worker preamble is gone
+    });
+    it('codex resumes via the `resume` subcommand, before the bypass flag and model', () => {
+      const cmd = buildAgentCommand(
+        { program: 'codex', model: 'gpt-5.5' },
+        { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'codex', sessionId: 'cx-9' } },
+      );
+      expect(cmd).toContain("codex resume 'cx-9' --dangerously-bypass-approvals-and-sandbox --model 'gpt-5.5'");
+    });
+    it('opencode resumes via -s alongside --model and --prompt', () => {
+      const cmd = buildAgentCommand(
+        { program: 'opencode', model: 'ollama/x' },
+        { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'opencode', sessionId: 'ses_42' } },
+      );
+      expect(cmd).toContain("-s 'ses_42' --model 'ollama/x'");
+      expect(cmd).toContain('--prompt');
+    });
+    it('shell-escapes the resume session id (injection defense)', () => {
+      const cmd = buildAgentCommand(
+        { program: 'claude-code', model: 'sonnet' },
+        { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'claude-code', sessionId: "x'; rm -rf / #" } },
+      );
+      expect(cmd).toContain("--resume 'x'\\''; rm -rf / #'"); // wrapped, the `;` never reaches the shell raw
+    });
+    it('omits resume tokens entirely when no resume is set (cold start unchanged)', () => {
+      const cmd = buildAgentCommand({ program: 'claude-code', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      expect(cmd).not.toContain('--resume');
+      expect(cmd).toContain('First read the project context'); // the normal worker preamble
+    });
+  });
 });

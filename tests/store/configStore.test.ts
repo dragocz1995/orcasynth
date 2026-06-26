@@ -136,8 +136,8 @@ describe('ConfigStore', () => {
     db.prepare("INSERT INTO settings (id, data) VALUES (1, ?)")
       .run(JSON.stringify({ providers: { 'claude-code': { bin: 'claude', args: '' }, bad: { bin: 42, args: '' } } }));
     expect(cfg.get().providers.bad).toBeUndefined();
-    // skipPermissions defaults to true when an older row omits it.
-    expect(cfg.get().providers['claude-code']).toEqual({ bin: 'claude', args: '', skipPermissions: true });
+    // skipPermissions and resume default to true when an older row omits them.
+    expect(cfg.get().providers['claude-code']).toEqual({ bin: 'claude', args: '', skipPermissions: true, resume: true });
     // A malformed provider in an update patch is also dropped.
     const c = cfg.update({ providers: { worse: { bin: 1, args: 2 } as unknown as { bin: string; args: string } } });
     expect(c.providers.worse).toBeUndefined();
@@ -147,9 +147,18 @@ describe('ConfigStore', () => {
     expect(cfg.get().providers['claude-code']?.skipPermissions).toBe(true);
     // An explicit false is persisted and returned; a fresh true flips it back.
     const off = cfg.update({ providers: { 'opencode': { bin: 'opencode', args: '', skipPermissions: false } } });
-    expect(off.providers['opencode']).toEqual({ bin: 'opencode', args: '', skipPermissions: false });
+    expect(off.providers['opencode']).toEqual({ bin: 'opencode', args: '', skipPermissions: false, resume: true });
     const on = cfg.update({ providers: { 'opencode': { bin: 'opencode', args: '', skipPermissions: true } } });
     expect(on.providers['opencode']?.skipPermissions).toBe(true);
+  });
+  it('round-trips the per-provider resume toggle and defaults it on', () => {
+    // Default providers carry resume: true out of the box.
+    expect(cfg.get().providers['claude-code']?.resume).toBe(true);
+    // An explicit false is persisted; resume stays off until flipped back.
+    const off = cfg.update({ providers: { 'codex': { bin: 'codex', args: '', skipPermissions: true, resume: false } } });
+    expect(off.providers['codex']).toEqual({ bin: 'codex', args: '', skipPermissions: true, resume: false });
+    const on = cfg.update({ providers: { 'codex': { bin: 'codex', args: '', skipPermissions: true, resume: true } } });
+    expect(on.providers['codex']?.resume).toBe(true);
   });
 });
 

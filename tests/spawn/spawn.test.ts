@@ -22,4 +22,29 @@ describe('SpawnService', () => {
     await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', spec: { program: 'opencode', model: 'm' } });
     expect(tmux.commandFor('orca-Nova')).toContain("/usr/bin/oc --model 'm' --pure --prompt");
   });
+
+  it('resumes the prior session when its program matches the spawn', async () => {
+    const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+    const agents = new AgentStore(db); const tmux = new FakeTmuxDriver();
+    const svc = new SpawnService({ tmux, agents });
+    await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', spec: { program: 'claude-code', model: 'sonnet' }, resume: { program: 'claude-code', sessionId: 'sess-7' } });
+    expect(tmux.commandFor('orca-Nova')).toContain("--resume 'sess-7'");
+  });
+
+  it('ignores a resume whose program no longer matches the task exec (cold start)', async () => {
+    const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+    const agents = new AgentStore(db); const tmux = new FakeTmuxDriver();
+    const svc = new SpawnService({ tmux, agents });
+    // recorded a claude session, but the operator switched the task's exec to codex since
+    await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', spec: { program: 'codex', model: 'gpt-5.5' }, resume: { program: 'claude-code', sessionId: 'sess-7' } });
+    expect(tmux.commandFor('orca-Nova')).not.toContain('resume');
+  });
+
+  it('ignores resume when the provider has it disabled', async () => {
+    const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
+    const agents = new AgentStore(db); const tmux = new FakeTmuxDriver();
+    const svc = new SpawnService({ tmux, agents, providers: () => ({ resume: false }) });
+    await svc.launch({ projectId: 1, projectPath: '/o', taskId: 'orca-1', agentName: 'Nova', spec: { program: 'claude-code', model: 'sonnet' }, resume: { program: 'claude-code', sessionId: 'sess-7' } });
+    expect(tmux.commandFor('orca-Nova')).not.toContain('--resume');
+  });
 });

@@ -182,6 +182,21 @@ export class TaskStore {
     this.db.prepare('UPDATE tasks SET labels = ? WHERE id = ?').run(t.labels.filter((l) => l !== label).join(','), id);
   }
 
+  /** Record the CLI session the agent ran under, as a `resume:<program>:<sessionId>` label, so a
+   *  later re-spawn of this task can `--resume` that session (full context) instead of cold-starting.
+   *  Written at close by the usage recorder; idempotent per close (re-stamping refreshes the id).
+   *  The session id is validated to `[\w-]+` — it flows into the CSV-joined labels column and later a
+   *  shell command, so anything with a comma or shell metacharacter is rejected, never stored. */
+  setResumeLabel(id: string, program: string, sessionId: string): void {
+    const t = this.get(id);
+    if (!t) return;
+    const labels = t.labels.filter((l) => !l.startsWith('resume:'));
+    if (program && sessionId && /^[\w-]+$/.test(program) && /^[\w-]+$/.test(sessionId)) {
+      labels.push(`resume:${program}:${sessionId}`);
+    }
+    this.db.prepare('UPDATE tasks SET labels = ? WHERE id = ?').run(labels.join(','), id);
+  }
+
   /** Tag the task with the agent (tmux session) running it, so task ↔ session is linkable. */
   setAgent(id: string, name: string): void {
     const t = this.get(id);

@@ -212,4 +212,19 @@ describe('TaskStore', () => {
     store.setExec('x', '');
     expect(store.get('x')?.labels).toEqual(['area:ui']);
   });
+
+  it('setResumeLabel sets and replaces the resume label, preserving others', () => {
+    store.create({ id: 'x', project_id: 1, title: 'X', labels: ['exec:sonnet'] });
+    store.setResumeLabel('x', 'claude-code', '7f3a-uuid');
+    expect(store.get('x')?.labels).toEqual(['exec:sonnet', 'resume:claude-code:7f3a-uuid']);
+    store.setResumeLabel('x', 'opencode', 'ses_99');
+    expect(store.get('x')?.labels).toEqual(['exec:sonnet', 'resume:opencode:ses_99']);
+  });
+
+  it('setResumeLabel rejects a session id with unsafe characters (CSV/shell defense), clearing any prior', () => {
+    store.create({ id: 'x', project_id: 1, title: 'X', labels: ['exec:sonnet'] });
+    store.setResumeLabel('x', 'claude-code', 'good-id');
+    store.setResumeLabel('x', 'claude-code', "evil,id; rm -rf /");
+    expect(store.get('x')?.labels).toEqual(['exec:sonnet']); // unsafe value dropped, no resume label stored
+  });
 });

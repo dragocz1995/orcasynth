@@ -1,4 +1,5 @@
 import { render } from '../prompts/index.js';
+import { resumeProviderFor, type PendingResume } from './resume/index.js';
 
 export interface AgentSpec { program: string; model: string }
 export interface SpawnCtx {
@@ -30,6 +31,11 @@ export interface SpawnCtx {
   /** How the agent invokes the orca CLI for read-only verbs (e.g. `orca ls`) — the global `orca`
    *  command in production, or `node <dist/cli/index.js>` in a source checkout. Defaults to `orca`. */
   cli?: string;
+  /** Resume a prior CLI session for this task instead of cold-starting: the agent reattaches to its
+   *  previous conversation (full context) and continues. Set by the spawn layer once it has confirmed
+   *  the session's program still matches and the provider allows resume. When present, the prompt is a
+   *  short continuation (worker-resume) rather than the full worker preamble. */
+  resume?: PendingResume;
 }
 
 const esc = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
@@ -43,12 +49,16 @@ export function buildAgentCommand(spec: AgentSpec, ctx: SpawnCtx): string {
   const closeCommand = ctx.closeCommand ?? `orca close ${ctx.taskId}`;
   const titlePart = ctx.taskTitle ? `: ${ctx.taskTitle}` : '';
   const detailsPart = ctx.taskDescription && ctx.taskDescription.trim() ? `\n\nDetails:\n${ctx.taskDescription.trim()}` : '';
-  // A phase agent must NOT redo earlier phases. Without this it sees the whole goal in its details
-  // and re-implements/re-verifies everything, only gradually discovering prior phases are done.
-  // The phase template carries the "build on prior phases" framing; the standalone one does not.
-  let prompt = ctx.epicId
-    ? render('worker-phase', { agentName: ctx.agentName, taskId: ctx.taskId, titlePart, detailsPart, epicId: ctx.epicId, closeCommand, cli: ctx.cli ?? 'orca' })
-    : render('worker', { agentName: ctx.agentName, taskId: ctx.taskId, titlePart, detailsPart, closeCommand });
+  // A resumed agent reattaches to its prior session — it already holds the full goal and what it did,
+  // so re-injecting the whole worker preamble would make it restart from scratch. Send a short
+  // continuation instead: pick up where it left off, fold in any new input (details), then close.
+  // A phase agent (epicId, not resumed) must NOT redo earlier phases — the phase template carries the
+  // "build on prior phases" framing the standalone one lacks.
+  let prompt = ctx.resume
+    ? render('worker-resume', { agentName: ctx.agentName, taskId: ctx.taskId, titlePart, detailsPart, closeCommand })
+    : ctx.epicId
+      ? render('worker-phase', { agentName: ctx.agentName, taskId: ctx.taskId, titlePart, detailsPart, epicId: ctx.epicId, closeCommand, cli: ctx.cli ?? 'orca' })
+      : render('worker', { agentName: ctx.agentName, taskId: ctx.taskId, titlePart, detailsPart, closeCommand });
   if (ctx.epicId && ctx.epicCloseCommand) {
     // The agent owns mission completion: after closing its own phase, if it was the last
     // one, it closes the epic itself and writes the overall result summary.
@@ -68,6 +78,14 @@ function buildLaunchCommand(spec: AgentSpec, ctx: SpawnCtx, prompt: string): str
   // Bypass interactive permission prompts unless the operator turned it off for this provider
   // (Settings → Providers). Each agent has its own mechanism; undefined defaults to on.
   const skip = ctx.skipPermissions !== false;
+  // Resume splice: a 'subcommand' (codex `resume <id>`) must precede the bypass flag; a 'flag'
+  // (claude `-r <id>`, opencode `-s <id>`) follows it, alongside --model. The leading tokens are our
+  // own literal flags/subcommand (safe); only the trailing session id is dynamic, so escape just that
+  // one (mirrors `--model ${esc(model)}`: the flag is literal, the value is quoted).
+  const plan = ctx.resume ? (resumeProviderFor(spec.program)?.resumeArgs(ctx.resume.sessionId) ?? null) : null;
+  const resumeStr = plan ? ' ' + plan.args.map((a, i) => i === plan.args.length - 1 ? esc(a) : a).join(' ') : '';
+  const resumeBefore = plan?.placement === 'subcommand' ? resumeStr : '';
+  const resumeAfter = plan?.placement === 'flag' ? resumeStr : '';
   if (spec.program.startsWith('opencode')) {
     const bin = ctx.bin || 'opencode';
     // Launch the interactive TUI (UI mode) with the task preloaded into the composer
@@ -77,17 +95,18 @@ function buildLaunchCommand(spec: AgentSpec, ctx: SpawnCtx, prompt: string): str
     // lives on `opencode run`), so the bypass is delivered as a merged config via env:
     // OPENCODE_CONFIG_CONTENT sets permission "*" → allow without writing any file into the repo.
     const yolo = skip ? `export OPENCODE_CONFIG_CONTENT=${esc('{"permission":"allow"}')} && ` : '';
-    return `${cd} && ${envExport}${yolo}${bin} --model ${esc(spec.model)}${extra} --prompt ${esc(prompt)}`;
+    // opencode bypasses via the yolo env, not a flag, so both placements land after the binary.
+    return `${cd} && ${envExport}${yolo}${bin}${resumeBefore}${resumeAfter} --model ${esc(spec.model)}${extra} --prompt ${esc(prompt)}`;
   }
   if (spec.program.startsWith('codex')) {
     const bin = ctx.bin || 'codex';
     // Positional prompt + autonomous approval bypass (codex's skip-permissions equivalent).
     const bypass = skip ? ' --dangerously-bypass-approvals-and-sandbox' : '';
-    return `${cd} && ${envExport}${bin}${bypass} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
+    return `${cd} && ${envExport}${bin}${resumeBefore}${bypass}${resumeAfter} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
   }
   const bin = ctx.bin || 'claude';
   // Autonomous approval bypass: orca-spawned agents run unattended in a tmux pane, so an
   // interactive permission prompt would hang the whole mission.
   const bypass = skip ? ' --dangerously-skip-permissions' : '';
-  return `${cd} && ${envExport}${bin}${bypass} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
+  return `${cd} && ${envExport}${bin}${resumeBefore}${bypass}${resumeAfter} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
 }

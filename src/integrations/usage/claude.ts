@@ -3,11 +3,12 @@ import { join } from 'node:path';
 import { EMPTY_USAGE, type TokenUsage } from './types.js';
 import { pickNthSession } from './walk.js';
 
-/** claude-code stores one JSONL transcript per session under
- *  ~/.claude/projects/<encoded-cwd>/<sessionUuid>.jsonl, where each assistant event carries
- *  `message.usage`. Pick the session that started when this spawn ran and sum its usage.
- *  claude does not record cost, so costUsd stays null (price externally if needed). */
-export function claudeUsage(home: string, dir: string, sinceMs: number, nth = 0): TokenUsage | null {
+/** Locate the claude-code transcript file for a spawn: the nth session (by start order) opened in
+ *  `dir` within the spawn window. Returns its absolute `.jsonl` path, or null. Single session-select
+ *  step shared by `claudeUsage` (which sums it) and the resume detector (which reads its session id
+ *  = the file's basename). claude-code stores one JSONL per session under
+ *  ~/.claude/projects/<encoded-cwd>/<sessionUuid>.jsonl. */
+export function locateClaudeSession(home: string, dir: string, sinceMs: number, nth = 0): string | null {
   // claude-code encodes a project path into a dir name by replacing '/', '.' and '_' with '-'.
   const projDir = join(home, '.claude', 'projects', dir.replace(/[/._]/g, '-'));
   if (!existsSync(projDir)) return null;
@@ -22,7 +23,15 @@ export function claudeUsage(home: string, dir: string, sinceMs: number, nth = 0)
     if (start == null) continue;
     sessions.push({ path: p, start });
   }
-  const best = pickNthSession(sessions, sinceMs, nth);
+  return pickNthSession(sessions, sinceMs, nth);
+}
+
+/** claude-code stores one JSONL transcript per session under
+ *  ~/.claude/projects/<encoded-cwd>/<sessionUuid>.jsonl, where each assistant event carries
+ *  `message.usage`. Pick the session that started when this spawn ran and sum its usage.
+ *  claude does not record cost, so costUsd stays null (price externally if needed). */
+export function claudeUsage(home: string, dir: string, sinceMs: number, nth = 0): TokenUsage | null {
+  const best = locateClaudeSession(home, dir, sinceMs, nth);
   if (!best) return null;
 
   const u: TokenUsage = { ...EMPTY_USAGE };

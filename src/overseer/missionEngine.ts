@@ -7,6 +7,7 @@ import type { TmuxDriver } from '../tmux/types.js';
 import type { AgentSpec } from '../spawn/commandBuilder.js';
 import type { EventBus } from '../api/sse.js';
 import { resolveExecutor } from './routing.js';
+import { parseResumeLabel } from '../spawn/resume/index.js';
 import { projectHead } from '../integrations/projectFiles.js';
 import { checkoutBusy } from './checkout.js';
 import { freeAgentName } from '../daemon/uniqueName.js';
@@ -311,7 +312,7 @@ export class MissionEngine {
       // (a just-closed phase still committing) — then `git diff base..HEAD` captures exactly this phase.
       await this.gitLock.run(cwd, async () => { const base = await projectHead(cwd); if (base) this.d.tasks.markBase(task.id, base); });
       try {
-        await this.d.spawn.launch({ projectId: epic.project_id, projectPath: cwd, taskId: task.id, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: m.epic_id });
+        await this.d.spawn.launch({ projectId: epic.project_id, projectPath: cwd, taskId: task.id, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: m.epic_id, resume: parseResumeLabel(task.labels) });
       } catch (e) {
         // Spawn failed (tmux down, bin missing): roll back to open so the task doesn't sit in_progress
         // with no agent — which would otherwise burn the stuck-detector's relaunch budget before it

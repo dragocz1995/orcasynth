@@ -27,6 +27,7 @@ import type { TmuxDriver } from '../tmux/types.js';
 import type { EventBus } from './sse.js';
 import type { AgentSpec } from '../spawn/commandBuilder.js';
 import { resolveExecutor } from '../overseer/routing.js';
+import { parseResumeLabel } from '../spawn/resume/index.js';
 import { decompose, parsePhases, modelsBlock, VALID_TYPES as VALID_PHASE_TYPES, type Phase } from '../overseer/planner.js';
 import { classifySession } from '../overseer/sessionInfo.js';
 import { buildReviewContext } from '../overseer/reviewContext.js';
@@ -580,6 +581,8 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const created: Task[] = [];
     let prevId: string | null = null;
     for (const ph of job.phases) {
+      // The web detail pane strips this appended overgoal back off (web/lib/agentUtils phaseDetails),
+      // which anchors on the exact `\n\nOverall goal:` separator — keep that wording/join in sync.
       const childDesc = ph.details ? `${ph.details}\n\nOverall goal: ${overallGoal}` : `Overall goal: ${overallGoal}`;
       const agentLabels = ph.agent && !usedAgents.has(ph.agent) ? [`agent:${ph.agent}`] : [];
       if (agentLabels.length) usedAgents.add(ph.agent!);
@@ -1407,7 +1410,7 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     await gitLock.run(cwd, async () => d.tasks.markBase(taskId, await projectHead(cwd)));
     let session: string;
     try {
-      ({ session } = await d.spawn.launch({ projectId, projectPath: pathFor(projectId), taskId, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: task.parent_id ?? undefined }));
+      ({ session } = await d.spawn.launch({ projectId, projectPath: pathFor(projectId), taskId, agentName, spec, taskTitle: task.title, taskDescription: task.description, epicId: task.parent_id ?? undefined, resume: parseResumeLabel(task.labels) }));
     } catch (e) {
       // The task was already flipped to in_progress above; a spawn failure (bad cwd, missing tmux,
       // name collision) would otherwise leave it stuck with no live session until the stuck detector

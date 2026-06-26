@@ -4,15 +4,15 @@ import { basename } from 'node:path';
 import { type TokenUsage } from './types.js';
 import { pickNthSession, walkFiles } from './walk.js';
 
-/** codex stores one rollout JSONL per session under ~/.codex/sessions/<Y>/<M>/<D>/rollout-*.jsonl,
- *  carrying a cumulative `total_token_usage` object. Pick the rollout started when this spawn ran
- *  and read its final cumulative usage. codex does not record cost (costUsd stays null). */
-export function codexUsage(home: string, _dir: string, sinceMs: number, nth = 0): TokenUsage | null {
+/** Locate the codex rollout file for a spawn: the nth rollout (by start order) within the spawn
+ *  window. Returns its absolute `rollout-*.jsonl` path, or null. Single session-select step shared
+ *  by `codexUsage` (which reads its final usage) and the resume detector (which extracts its session
+ *  id via `codexSessionId`). codex rollouts aren't dir-scoped on disk, so concurrent codex agents
+ *  can only be disambiguated by start order. */
+export function locateCodexSession(home: string, _dir: string, sinceMs: number, nth = 0): string | null {
   const root = join(home, '.codex', 'sessions');
   if (!existsSync(root)) return null;
 
-  // codex rollouts aren't dir-scoped on disk, so concurrent codex agents can only be
-  // disambiguated by start order; `pickNthSession` picks the rank-th rollout in the spawn window.
   const sessions: { path: string; start: number }[] = [];
   for (const f of walkFiles(root)) {
     if (!basename(f).startsWith('rollout-') || !f.endsWith('.jsonl')) continue;
@@ -20,7 +20,21 @@ export function codexUsage(home: string, _dir: string, sinceMs: number, nth = 0)
     if (start == null) continue;
     sessions.push({ path: f, start });
   }
-  const best = pickNthSession(sessions, sinceMs, nth);
+  return pickNthSession(sessions, sinceMs, nth);
+}
+
+/** The codex session id (UUID) embedded in a rollout filename:
+ *  `rollout-2026-06-15T07-53-43-<uuid>.jsonl` → `<uuid>`. Null if the name doesn't match. */
+export function codexSessionId(path: string): string | null {
+  const m = basename(path).match(/^rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
+  return m ? m[1]! : null;
+}
+
+/** codex stores one rollout JSONL per session under ~/.codex/sessions/<Y>/<M>/<D>/rollout-*.jsonl,
+ *  carrying a cumulative `total_token_usage` object. Pick the rollout started when this spawn ran
+ *  and read its final cumulative usage. codex does not record cost (costUsd stays null). */
+export function codexUsage(home: string, dir: string, sinceMs: number, nth = 0): TokenUsage | null {
+  const best = locateCodexSession(home, dir, sinceMs, nth);
   if (!best) return null;
   return finalUsage(best);
 }
