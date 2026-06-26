@@ -21,6 +21,7 @@ import { useToast } from '../../components/ui/Toast';
 import { LiveTail } from '../../components/terminal/LiveTail';
 import { useTranslation } from '../../lib/i18n';
 import { taskTypeMeta, taskTypeLabel, TASK_TYPES, PRIORITIES } from './taskMeta';
+import { DepPicker } from './DepPicker';
 
 type Mode = 'single' | 'planning';
 interface ManualPhase { title: string; type: string }
@@ -43,7 +44,7 @@ function isoToLocalInput(iso?: string | null): string {
 }
 const localInputToIso = (v: string): string | null => (v ? new Date(v).toISOString() : null);
 
-export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onClose: () => void; initialSchedule?: string }) {
+export function TaskModal({ task, onClose, initialSchedule, initialMode, initialGoal }: { task?: Task; onClose: () => void; initialSchedule?: string; initialMode?: 'single' | 'planning'; initialGoal?: string }) {
   const editing = !!task;
   const { data: config } = useConfig();
   const models = allModels(config?.customModels, config?.hiddenPresets)
@@ -57,7 +58,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
   const spawn = useSpawn();
   const plan = usePlanTask();
 
-  const [mode, setMode] = useState<Mode>('single');
+  const [mode, setMode] = useState<Mode>(initialMode ?? 'single');
 
   // Which project the task/mission lands in (and the agent runs in). Only offered when the user can
   // reach more than one project; the daemon defaults to its home project when project_id is omitted.
@@ -99,7 +100,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
 
   // Planning fields
   const [missionName, setMissionName] = useState(''); // optional short name → epic title (goal stays the brief)
-  const [goal, setGoal] = useState('');
+  const [goal, setGoal] = useState(initialGoal ?? '');
   // Seed lazily from config: a `useState(config…)` initializer runs once before the async config has
   // loaded and would freeze the fallback (L3 / 1) even when the saved default differs. The user's pick
   // overrides; otherwise fall through to config, then the constant — so the field tracks config as soon
@@ -292,15 +293,7 @@ export function TaskModal({ task, onClose, initialSchedule }: { task?: Task; onC
             )}
             {depCandidates.length > 0 && (
               <Field label={t.tasks.fieldDependsOn} hint={t.tasks.dependsOnHint}>
-                <div className="max-h-32 overflow-y-auto rounded-md border border-border bg-surface p-1">
-                  {depCandidates.map((dep) => (
-                    <button type="button" key={dep.id} onClick={() => toggleDep(dep.id)} className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-elevated">
-                      <Checkbox checked={deps.includes(dep.id)} />
-                      <span className="min-w-0 flex-1 truncate text-text">{dep.title}</span>
-                      <span className="shrink-0 font-mono text-[11px] text-text-muted">{dep.id}</span>
-                    </button>
-                  ))}
-                </div>
+                <DepPicker candidates={depCandidates} selected={deps} onToggle={toggleDep} />
               </Field>
             )}
             {!editing && (

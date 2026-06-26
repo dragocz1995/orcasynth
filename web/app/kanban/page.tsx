@@ -69,6 +69,7 @@ export default function KanbanPage() {
             missions={missions.data ?? []}
             onMove={(id, status) => setStatus.mutate({ id, status }, { onError: (e) => toast(String(e), 'error') })}
             onSelect={openTask}
+            onEdit={setEditing}
           />
         ) : (
           <CalendarView

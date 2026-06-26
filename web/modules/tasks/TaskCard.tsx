@@ -26,7 +26,7 @@ import { statusTone } from '../dashboard/statusTone';
 /** A single task as a compact list row — mirrors the autopilot epic's collapsed row so the task
  *  list stays dense. Quick run controls + status sit on the row; the full detail (agent, usage,
  *  changes, context) opens in the detail pane on click, so nothing is lost by slimming the card. */
-export function TaskCard({ task, onEdit, onSelect, active = false, blockers, selected = false, onToggleSelect, selecting = false }: { task: Task; onEdit: (t: Task) => void; onSelect?: (t: Task) => void; active?: boolean; blockers?: Task[]; selected?: boolean; onToggleSelect?: (id: string) => void; selecting?: boolean }) {
+export function TaskCard({ task, onEdit, onSelect, onContextMenu, active = false, blockers, selected = false, onToggleSelect, selecting = false }: { task: Task; onEdit: (t: Task) => void; onSelect?: (t: Task) => void; onContextMenu?: (e: React.MouseEvent, t: Task) => void; active?: boolean; blockers?: Task[]; selected?: boolean; onToggleSelect?: (id: string) => void; selecting?: boolean }) {
   const close = useCloseTask();
   const del = useDeleteTask();
   const { toast } = useToast();
@@ -55,6 +55,7 @@ export function TaskCard({ task, onEdit, onSelect, active = false, blockers, sel
       role="button"
       tabIndex={0}
       onClick={open}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, task) : undefined}
       onKeyDown={(e) => { if (e.key === 'Enter') open(); }}
       className={`card-interactive group relative flex cursor-pointer items-center gap-3 rounded-lg border p-2.5 ${selected || active ? 'border-accent bg-accent/[0.06]' : 'border-border bg-surface'}`}
     >

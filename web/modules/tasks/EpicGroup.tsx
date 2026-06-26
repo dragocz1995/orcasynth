@@ -24,7 +24,7 @@ import { useTranslation } from '../../lib/i18n';
  *  (collapsed) until expanded, so the list shows the epic rather than every sub-task. The epic IS
  *  the mission — its lifecycle (engage / pause / resume / disengage) and rolled-up cost are driven
  *  right here, so there's no separate Missions page. */
-export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, onEdit, onSelect, activeId, blockedBy }: {
+export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, onEdit, onSelect, onContextMenu, activeId, blockedBy }: {
   epic: Task;
   phases: Task[];
   effectiveStatus?: Task['status'];
@@ -32,6 +32,7 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
   onToggle: () => void;
   onEdit: (t: Task) => void;
   onSelect: (t: Task) => void;
+  onContextMenu?: (e: React.MouseEvent, t: Task) => void;
   activeId: string | null;
   blockedBy: Map<string, Task[]>;
 }) {
@@ -102,7 +103,7 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
   // list — is rounded to match below (rounded-b-lg).
   return (
     <div className={`group/epic rounded-lg border border-accent/30 transition-colors ${activeId === epic.id ? 'bg-accent/[0.07]' : 'bg-accent/[0.04] hover:bg-accent/[0.06]'}`}>
-      <div className="flex items-center">
+      <div className="flex items-center" onContextMenu={onContextMenu ? (e) => onContextMenu(e, epic) : undefined}>
         <button
           type="button"
           onClick={() => { onToggle(); onSelect(epic); }}
@@ -195,7 +196,7 @@ export function EpicGroup({ epic, phases, effectiveStatus, expanded, onToggle, o
       {expanded ? (
         <div className="flex flex-col gap-2.5 rounded-b-lg border-t border-accent/20 bg-bg/30 p-2.5 pl-5">
           {phases.map((p) => (
-            <TaskCard key={p.id} task={p} onEdit={onEdit} onSelect={onSelect} active={activeId === p.id} blockers={blockedBy.get(p.id)} />
+            <TaskCard key={p.id} task={p} onEdit={onEdit} onSelect={onSelect} onContextMenu={onContextMenu} active={activeId === p.id} blockers={blockedBy.get(p.id)} />
           ))}
         </div>
       ) : null}

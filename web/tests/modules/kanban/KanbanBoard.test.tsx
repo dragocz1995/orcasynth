@@ -1,9 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { KanbanBoard } from '../../../modules/kanban/KanbanBoard';
 import { ToastProvider } from '../../../components/ui/Toast';
 import { createWrapper } from '../../test-utils';
 import type { Task } from '../../../lib/types';
+
+/** Board renders toasts via its context menu hook, so every render needs a ToastProvider too. */
+function wrap() {
+  const { wrapper: Base } = createWrapper();
+  return { wrapper: ({ children }: { children: ReactNode }) => <Base><ToastProvider>{children}</ToastProvider></Base> };
+}
 
 const tasks: Task[] = [
   { id: 'a', title: 'Alpha', status: 'open' },
@@ -20,7 +27,7 @@ function makeDrop(taskId: string) {
 
 describe('KanbanBoard', () => {
   it('renders all five columns with counts', () => {
-    const { wrapper: W } = createWrapper();
+    const { wrapper: W } = wrap();
     render(<KanbanBoard tasks={tasks} onMove={() => {}} />, { wrapper: W });
     // All five status columns render (labels may repeat as status badges, so assert by column id).
     for (const s of ['open', 'in_progress', 'blocked', 'closed', 'cancelled']) {
@@ -33,7 +40,7 @@ describe('KanbanBoard', () => {
 
   it('dropping a card on a different column calls onMove(taskId, newStatus)', () => {
     const onMove = vi.fn();
-    const { wrapper: W } = createWrapper();
+    const { wrapper: W } = wrap();
     render(<KanbanBoard tasks={tasks} onMove={onMove} />, { wrapper: W });
     const inProgress = screen.getByTestId('column-in_progress');
     fireEvent.dragOver(inProgress);
@@ -42,7 +49,7 @@ describe('KanbanBoard', () => {
   });
 
   it('renders agent identity, result summary and outcome on an enriched card', () => {
-    const { wrapper: W } = createWrapper();
+    const { wrapper: W } = wrap();
     render(<KanbanBoard tasks={enriched} onMove={() => {}} />, { wrapper: W });
     const card = within(screen.getByTestId('column-closed'));
     expect(card.getByText('orca-atlas')).toBeTruthy();              // resolved agent session name
@@ -56,8 +63,8 @@ describe('KanbanBoard', () => {
       { id: 'p1', title: 'Phase One', status: 'in_progress', parent_id: 'e' },
       { id: 'p2', title: 'Phase Two', status: 'open', parent_id: 'e' },
     ];
-    const { wrapper: W } = createWrapper();
-    render(<ToastProvider><KanbanBoard tasks={epicTasks} onMove={() => {}} /></ToastProvider>, { wrapper: W });
+    const { wrapper: W } = wrap();
+    render(<KanbanBoard tasks={epicTasks} onMove={() => {}} />, { wrapper: W });
     // Epic header is shown; phases are hidden while collapsed.
     const header = screen.getByRole('button', { name: /Autopilot Epic/ });
     expect(header).toBeTruthy();
@@ -70,7 +77,7 @@ describe('KanbanBoard', () => {
 
   it('dropping on the same column does not call onMove', () => {
     const onMove = vi.fn();
-    const { wrapper: W } = createWrapper();
+    const { wrapper: W } = wrap();
     render(<KanbanBoard tasks={tasks} onMove={onMove} />, { wrapper: W });
     const open = screen.getByTestId('column-open');
     fireEvent.drop(open, makeDrop('a'));

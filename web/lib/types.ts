@@ -20,7 +20,7 @@ type PlanJobStatus = 'planning' | 'done' | 'failed';
 export interface PlanJob { id: string; epicId: string | null; goal: string; status: PlanJobStatus; phases: PlanPhase[]; error?: string; sessionName?: string }
 /** Autopilot planning is async: the endpoint returns a job to poll. Manual mode still returns a PlanResult. */
 export type PlanSubmitResult = { jobId: string; epicId?: string } | PlanResult;
-export interface InsertPhasesInput { phases?: { title: string; type?: string }[]; goal?: string; exec?: string; prompt?: string }
+export interface InsertPhasesInput { phases?: { title: string; type?: string; details?: string }[]; goal?: string; exec?: string; prompt?: string }
 export interface InsertPhasesResult { epic: Task; phases: Task[] }
 export interface EngageInput { epicId: string; autonomy: string; maxSessions: number }
 export type PromptOption = { id: string; label: string };

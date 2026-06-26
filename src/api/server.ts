@@ -1285,13 +1285,13 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     const epic = d.tasks.get(epicId);
     if (!epic || epic.type !== 'epic') return c.json({ error: 'epic not found' }, 404);
     if (!canAccessProject(c, epic.project_id)) return c.json({ error: 'forbidden' }, 403);
-    const b = await c.req.json() as { phases?: { title?: string; type?: string }[]; goal?: string; prompt?: string; exec?: string };
+    const b = await c.req.json() as { phases?: { title?: string; type?: string; details?: string }[]; goal?: string; prompt?: string; exec?: string };
     if (b.exec && !d.config.get().allowedExecs.includes(b.exec)) return c.json({ error: 'exec not allowed' }, 400);
     if (b.exec && !execAllowedForUser(c, b.exec)) return c.json({ error: 'exec not allowed for user' }, 403);
 
     // Manual insert: explicit phases, no LLM, no key. persistPlan appends after the epic's tail.
     if (Array.isArray(b.phases) && b.phases.length > 0) {
-      const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task' })).filter((p) => p.title);
+      const phases: Phase[] = b.phases.map((p) => ({ title: (p.title ?? '').trim(), type: VALID_PHASE_TYPES.has(p.type ?? '') ? p.type! : 'task', details: (p.details ?? '').trim() || undefined })).filter((p) => p.title);
       if (phases.length === 0) return c.json({ error: 'phases required' }, 400);
       const job = planJobs.create({ goal: epic.description?.trim() || epic.title, projectId: epic.project_id, epicId, dryRun: false, exec: b.exec });
       job.phases = phases;

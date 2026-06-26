@@ -23,6 +23,7 @@ import { ProjectFilterPills } from '../../components/ui/ProjectFilterPills';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
 import { TaskCard } from './TaskCard';
 import { TaskModal } from './TaskModal';
+import { useTaskContextMenu } from './useTaskContextMenu';
 import { DateRangeFilter } from './DateRangeFilter';
 import { DEFAULT_RANGE, serializeRange, parseRange, isStoredRange, inRange } from './dateRange';
 import { dayKey } from '../kanban/calendar';
@@ -120,6 +121,8 @@ export function TasksView() {
     }
     return out;
   }, [tasks.data, deps.data]);
+
+  const ctxMenu = useTaskContextMenu({ onSelect: (x) => setSelectedId(x.id), onEdit: setEditing, childMap, blockedBy, missions: missions.data ?? [] });
 
   const toggleSelect = (id: string) => setSelected((cur) => { const next = new Set(cur); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const clearSelection = () => setSelected(new Set());
@@ -227,9 +230,9 @@ export function TasksView() {
                     {g.items.map((task) => {
                       const kids = childMap.get(task.id);
                       if (task.type === 'epic' && kids && kids.length > 0) {
-                        return <EpicGroup key={task.id} epic={task} phases={kids} effectiveStatus={epicEffectiveStatus(task, missions.data ?? [], kids)} expanded={expandedEpics.has(task.id)} onToggle={() => toggleEpic(task.id)} onEdit={setEditing} onSelect={(x) => setSelectedId(x.id)} activeId={selectedId} blockedBy={blockedBy} />;
+                        return <EpicGroup key={task.id} epic={task} phases={kids} effectiveStatus={epicEffectiveStatus(task, missions.data ?? [], kids)} expanded={expandedEpics.has(task.id)} onToggle={() => toggleEpic(task.id)} onEdit={setEditing} onSelect={(x) => setSelectedId(x.id)} onContextMenu={ctxMenu.open} activeId={selectedId} blockedBy={blockedBy} />;
                       }
-                      return <TaskCard key={task.id} task={task} onEdit={setEditing} onSelect={(x) => setSelectedId(x.id)} active={selectedId === task.id} blockers={blockedBy.get(task.id)} selected={selected.has(task.id)} onToggleSelect={toggleSelect} selecting={selected.size > 0} />;
+                      return <TaskCard key={task.id} task={task} onEdit={setEditing} onSelect={(x) => setSelectedId(x.id)} onContextMenu={ctxMenu.open} active={selectedId === task.id} blockers={blockedBy.get(task.id)} selected={selected.has(task.id)} onToggleSelect={toggleSelect} selecting={selected.size > 0} />;
                     })}
                   </div>
                 </div>
@@ -284,6 +287,8 @@ export function TasksView() {
       {creating && <TaskModal onClose={() => setCreating(false)} />}
       {editing && <TaskModal task={editing} onClose={() => setEditing(null)} />}
       <ConfirmDialog open={confirmBulkDelete} title={t.tasks.confirmBulkDeleteTitle.replace('{count}', String(selected.size))} description={t.tasks.confirmBulkDeleteDescription} onClose={() => setConfirmBulkDelete(false)} onConfirm={bulkDelete} />
+      {ctxMenu.menu}
+      {ctxMenu.modals}
     </>
   );
 }

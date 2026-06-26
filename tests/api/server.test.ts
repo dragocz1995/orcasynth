@@ -550,9 +550,14 @@ it('POST /tasks/:epicId/phases ticks an active mission so it picks up the new ph
     project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' }, clock: new FakeClock(0), config,
   });
   tasks.create({ id: 'E', project_id: 1, title: 'Epic', type: 'epic', description: 'goal' });
-  const res = await app.request('/tasks/E/phases', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phases: [{ title: 'New' }] }) });
+  const res = await app.request('/tasks/E/phases', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ phases: [{ title: 'New', details: 'Validate the login redirect' }] }) });
   expect(res.status).toBe(201);
   expect(ticked).toBe('m-E');
+  // A manual phase's details flow through to the created task's description (next to the overall goal),
+  // so the agent is told what to do — not just the phase title.
+  const body = await res.json() as { phases: { description?: string }[] };
+  expect(body.phases[0]!.description).toContain('Validate the login redirect');
+  expect(body.phases[0]!.description).toContain('Overall goal: goal');
 });
 
 it('returns 400 on a malformed JSON body (central onError, not a 500)', async () => {

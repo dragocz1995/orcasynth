@@ -7,6 +7,7 @@ import { epicChildren, phaseIds, epicEffectiveStatus } from '../../lib/taskTree'
 import { KanbanCard } from './KanbanCard';
 import { KanbanEpicCard } from './KanbanEpicCard';
 import { statusLabel } from '../tasks/taskMeta';
+import { useTaskContextMenu } from '../tasks/useTaskContextMenu';
 import { useTranslation } from '../../lib/i18n';
 
 const COLUMNS: { status: TaskStatus; labelKey: string; icon: LucideIcon; color: string }[] = [
@@ -17,10 +18,11 @@ const COLUMNS: { status: TaskStatus; labelKey: string; icon: LucideIcon; color: 
   { status: 'cancelled', labelKey: 'columnCancelled', icon: XCircle, color: 'var(--color-cancelled)' },
 ];
 
-export function KanbanBoard({ tasks, onMove, onSelect, blockedBy, missions }: { tasks: Task[]; onMove: (taskId: string, status: TaskStatus) => void; onSelect?: (t: Task) => void; blockedBy?: Map<string, Task[]>; missions?: Mission[] }) {
+export function KanbanBoard({ tasks, onMove, onSelect, onEdit, blockedBy, missions }: { tasks: Task[]; onMove: (taskId: string, status: TaskStatus) => void; onSelect?: (t: Task) => void; onEdit?: (t: Task) => void; blockedBy?: Map<string, Task[]>; missions?: Mission[] }) {
   const { t } = useTranslation();
   const activeMissions = missions ?? [];
   const childMap = epicChildren(tasks);
+  const ctxMenu = useTaskContextMenu({ onSelect: (x) => onSelect?.(x), onEdit: (x) => onEdit?.(x), childMap, blockedBy: blockedBy ?? new Map(), missions: activeMissions });
   const phaseSet = phaseIds(tasks);
   // An epic is placed by its effective status (active mission / running phase → in progress,
   // all phases done → closed); its true task status is preserved on the card (title/tooltip).
@@ -45,12 +47,14 @@ export function KanbanBoard({ tasks, onMove, onSelect, blockedBy, missions }: { 
         dragging={draggingId === task.id}
         statusLabel={statusLabel(t, task.status)}
         onSelect={onSelect}
+        onContextMenu={ctxMenu.open}
         onDragStart={(e) => { e.dataTransfer.setData('text/plain', task.id); setDraggingId(task.id); }}
         onDragEnd={() => { setDraggingId(null); setDragOver(null); }}
       />
     );
   };
   return (
+    <>
     <div className="flex gap-3 overflow-x-auto">
       {COLUMNS.map((col) => {
         const colLabel = t.kanban[col.labelKey as keyof typeof t.kanban] as string;
@@ -92,5 +96,8 @@ export function KanbanBoard({ tasks, onMove, onSelect, blockedBy, missions }: { 
       );
     })}
     </div>
+    {ctxMenu.menu}
+    {ctxMenu.modals}
+    </>
   );
 }
