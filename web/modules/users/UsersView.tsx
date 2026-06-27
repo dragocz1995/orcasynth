@@ -14,6 +14,7 @@ import { Input } from '../../components/ui/Input';
 import { Field } from '../../components/ui/Field';
 import { Modal, ModalBody, ModalFooter } from '../../components/ui/Modal';
 import { ActionMenu } from '../../components/ui/ActionMenu';
+import { ContextMenu, ContextMenuState, DIVIDER } from '../../components/ui/ContextMenu';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { LoadingState, ErrorState, EmptyState } from '../../components/ui/states';
@@ -102,6 +103,7 @@ export function UsersView() {
   const [creating, setCreating] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null);
 
   function handleDelete(id: number) {
     deleteUser.mutate(id, {
@@ -146,6 +148,30 @@ export function UsersView() {
   const globalExecs = config.data?.allowedExecs ?? [];
   const customModels = config.data?.customModels ?? [];
 
+  function openCtxMenu(e: React.MouseEvent, user: OrcaUser) {
+    e.preventDefault();
+    e.stopPropagation();
+    setCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        ...(isAdmin ? [{
+          label: t.users.ctxToggleAdmin,
+          icon: user.is_admin ? Shield : ShieldCheck,
+          onClick: () => { if (!updateUser.isPending) handleRole(user); },
+        }] : []),
+        ...(isAdmin ? [DIVIDER as typeof DIVIDER] : []),
+        {
+          label: t.users.ctxRemoveAccess,
+          icon: Trash2,
+          danger: true,
+          onClick: () => { if (data.length > 1 && !deleteUser.isPending) handleDelete(user.id); },
+          disabled: data.length <= 1,
+        },
+      ],
+    });
+  }
+
   return (
     <>
       <ModuleHeader title={t.page.users} count={users.data?.length} icon={Users}>
@@ -162,6 +188,7 @@ export function UsersView() {
               <li
                 key={user.id}
                 className="card-interactive group flex items-center gap-3.5 rounded-lg border border-border bg-surface p-3.5"
+                onContextMenu={(e) => openCtxMenu(e, user)}
               >
                 <Avatar user={user} size={48} />
 
@@ -216,6 +243,7 @@ export function UsersView() {
           </form>
         </Modal>
       )}
+      {ctxMenu && <ContextMenu state={ctxMenu} onClose={() => setCtxMenu(null)} />}
     </>
   );
 }
