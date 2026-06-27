@@ -9,13 +9,16 @@
  */
 
 /** Agent program ids understood by spawn() / resolveExecutor. */
-export type Program = 'claude-code' | 'opencode' | 'codex';
+export type Program = 'claude-code' | 'opencode' | 'codex' | 'kilo' | 'pi' | 'omp';
 
 /** Explicit `<prefix>:<model>` spec prefixes, in match order, mapped to their program. */
 export const PROGRAM_PREFIXES: Readonly<Record<string, Program>> = {
   'codex:': 'codex',
   'opencode:': 'opencode',
   'claude:': 'claude-code',
+  'kilo:': 'kilo',
+  'pi:': 'pi',
+  'omp:': 'omp',
 };
 
 /** Program a bare (prefix-less) spec routes to depending on whether it looks like `provider/model`. */
@@ -30,6 +33,9 @@ export const DEFAULT_BINS: Readonly<Record<Program, string>> = {
   'claude-code': 'claude',
   'opencode': 'opencode',
   'codex': 'codex',
+  'kilo': 'kilo',
+  'pi': 'pi',
+  'omp': 'omp',
 };
 
 /** Built-in exec labels offered/allowed out of the box (the default `allowedExecs`). Keep in sync

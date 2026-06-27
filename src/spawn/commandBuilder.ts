@@ -112,6 +112,30 @@ function buildLaunchCommand(spec: AgentSpec, ctx: SpawnCtx, prompt: string): str
     const bypass = skip ? ' --dangerously-bypass-approvals-and-sandbox' : '';
     return `${cd} && ${envExport}${bin}${resumeBefore}${bypass}${resumeAfter} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
   }
+  if (spec.program === 'kilo') {
+    const bin = ctx.bin || 'kilo';
+    // Kilo Code (7.x) interactive TUI: the task is delivered via `--prompt` (a positional arg is the
+    // project path, not the prompt), `--model provider/model` selects the model on a configured
+    // provider, and resume (`--session <id>`) is a 'flag'. Kilo 7.x has no skip-permissions flag —
+    // tool auto-approval lives in the user's kilo config (`permission: { bash: "allow", … }`), so
+    // `skip` has no effect here (the Providers toggle is a no-op for kilo, same as pi/omp).
+    return `${cd} && ${envExport}${bin}${resumeBefore}${resumeAfter} --model ${esc(spec.model)}${extra} --prompt ${esc(prompt)}`;
+  }
+  if (spec.program === 'pi') {
+    const bin = ctx.bin || 'pi';
+    // Pi interactive TUI: positional prompt seeds and submits the conversation. Pi has no
+    // skip-permissions flag — its built-in tools run without confirmation — so `skip` has no effect
+    // here (the Providers toggle is a no-op for pi). Resume (`--session <id>`) is a 'flag'.
+    return `${cd} && ${envExport}${bin}${resumeBefore}${resumeAfter} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
+  }
+  if (spec.program === 'omp') {
+    const bin = ctx.bin || 'omp';
+    // oh-my-pi interactive TUI: positional prompt seeds and submits; `--auto-approve` skips all tool
+    // approval prompts (its skip-permissions equivalent). Resume (`--resume <id>`) is a 'flag'. Note:
+    // omp runs on the Bun runtime, so `bun` must be on the daemon's PATH for the bin to start.
+    const bypass = skip ? ' --auto-approve' : '';
+    return `${cd} && ${envExport}${bin}${resumeBefore}${bypass}${resumeAfter} --model ${esc(spec.model)}${extra} ${esc(prompt)}`;
+  }
   const bin = ctx.bin || 'claude';
   // Autonomous approval bypass: orca-spawned agents run unattended in a tmux pane, so an
   // interactive permission prompt would hang the whole mission.

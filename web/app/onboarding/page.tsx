@@ -177,7 +177,7 @@ export default function OnboardingPage() {
     : false;
   const allStepsDone = !isFresh?.noConfigPersisted && backendReady && users.data && users.data.length > 0;
 
-  const agentTools = cliStatus.data?.tools.filter((t) => ['claude', 'codex', 'opencode'].includes(t.name)) ?? [];
+  const agentTools = cliStatus.data?.tools.filter((t) => ['claude', 'codex', 'opencode', 'kilo', 'pi', 'omp'].includes(t.name)) ?? [];
   const sysTools = cliStatus.data?.tools.filter((t) => ['node', 'tmux', 'git'].includes(t.name)) ?? [];
 
   return (

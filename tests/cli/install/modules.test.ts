@@ -16,9 +16,12 @@ function runner(over: Partial<Runner> = {}): Runner {
 }
 
 describe('install/agentClis', () => {
-  it('covers claude, opencode and codex with their npm packages', () => {
-    expect(AGENT_CLIS.map((c) => c.id).sort()).toEqual(['claude', 'codex', 'opencode']);
+  it('covers every supported agent CLI with its npm package', () => {
+    expect(AGENT_CLIS.map((c) => c.id).sort()).toEqual(['claude', 'codex', 'kilo', 'omp', 'opencode', 'pi']);
     expect(AGENT_CLIS.find((c) => c.id === 'claude')!.pkg).toBe('@anthropic-ai/claude-code');
+    expect(AGENT_CLIS.find((c) => c.id === 'kilo')!.pkg).toBe('@kilocode/cli');
+    expect(AGENT_CLIS.find((c) => c.id === 'pi')!.pkg).toBe('@earendil-works/pi-coding-agent');
+    expect(AGENT_CLIS.find((c) => c.id === 'omp')!.pkg).toBe('@oh-my-pi/pi-coding-agent');
   });
   it('detects which CLIs are installed for the service user', async () => {
     const r = runner({ which: async (cmd) => (cmd === 'claude' ? '/u/bin/claude' : null) });

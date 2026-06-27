@@ -8,6 +8,9 @@ export const AGENT_CLIS: AgentCli[] = [
   { id: 'claude', bin: 'claude', pkg: '@anthropic-ai/claude-code' },
   { id: 'opencode', bin: 'opencode', pkg: 'opencode-ai' },
   { id: 'codex', bin: 'codex', pkg: '@openai/codex' },
+  { id: 'kilo', bin: 'kilo', pkg: '@kilocode/cli' },
+  { id: 'pi', bin: 'pi', pkg: '@earendil-works/pi-coding-agent' },
+  { id: 'omp', bin: 'omp', pkg: '@oh-my-pi/pi-coding-agent' },
 ];
 
 export interface DetectedCli extends AgentCli { installed: boolean; path: string | null }

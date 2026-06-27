@@ -84,6 +84,9 @@ export const en = {
     claudeCode: 'Claude Code',
     opencode: 'OpenCode',
     codex: 'Codex',
+    kilo: 'Kilo Code',
+    pi: 'Pi',
+    omp: 'oh-my-pi',
   },
   auth: {
     signIn: 'Sign in',
@@ -580,6 +583,7 @@ export const en = {
     extraArgs: 'Extra args',
     skipPermissions: 'Skip permission prompts',
     skipPermissionsHint: 'The agent runs without interactive "Allow?" prompts — orca spawns it unattended in tmux, so a prompt would otherwise stall the mission. Autonomy is enforced by the overseer above the agent. Turn off only if you want to approve prompts by hand.',
+    skipPermissionsNoop: 'Orca cannot toggle this agent’s permissions from here — it either runs its built-in tools without confirmation, or you set auto-approval in the agent’s own config.',
     resumeSessions: 'Resume prior sessions',
     resumeSessionsHint: 'On a re-run (review fix, stuck relaunch, or a manual restart), the agent resumes its previous CLI session — keeping full context to finish the task instead of cold-starting. Falls back to a fresh start automatically when no matching session exists. Turn off to always start clean.',
     executor: 'Executor',

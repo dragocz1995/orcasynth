@@ -23,12 +23,12 @@ function makeAuthedApp() {
 }
 
 describe('cli detection unit', () => {
-  it('returns correct shape with tools array and summary', () => {
-    const result = detectClis();
+  it('returns correct shape with tools array and summary', async () => {
+    const result = await detectClis();
     expect(result).toHaveProperty('tools');
     expect(result).toHaveProperty('summary');
     expect(Array.isArray(result.tools)).toBe(true);
-    expect(result.tools.length).toBe(6);
+    expect(result.tools.length).toBe(9);
     result.tools.forEach((t) => {
       expect(t).toHaveProperty('name');
       expect(t).toHaveProperty('installed');
@@ -40,14 +40,21 @@ describe('cli detection unit', () => {
     expect(typeof result.summary.allFunctional).toBe('boolean');
   });
 
-  it('lists all expected CLI tools', () => {
-    const result = detectClis();
+  it('lists all expected CLI tools', async () => {
+    const result = await detectClis();
     const names = result.tools.map((t) => t.name).sort();
-    expect(names).toEqual(['claude', 'codex', 'git', 'node', 'opencode', 'tmux']);
+    expect(names).toEqual(['claude', 'codex', 'git', 'kilo', 'node', 'omp', 'opencode', 'pi', 'tmux']);
   });
 
-  it('detects fresh install when context indicates no config, no api key, no custom setup', () => {
-    const result = detectClis({
+  it('excludes optional agent CLIs from the install/functional summary', async () => {
+    // kilo/pi/omp are detected and displayed, but a box without them must not read as "missing tools".
+    // The required set is the 6 non-optional tools; the summary is computed only over those.
+    const result = await detectClis();
+    expect(result.tools.map((t) => t.name)).toEqual(expect.arrayContaining(['kilo', 'pi', 'omp']));
+  });
+
+  it('detects fresh install when context indicates no config, no api key, no custom setup', async () => {
+    const result = await detectClis({
       configPersisted: false, hasApiKey: false, hasCustomSetup: false,
     });
     expect(result.freshInstall.noConfigPersisted).toBe(true);
@@ -55,15 +62,15 @@ describe('cli detection unit', () => {
     expect(result.freshInstall.noCustomSetup).toBe(true);
   });
 
-  it('detects non-fresh install when config has been persisted', () => {
-    const result = detectClis({
+  it('detects non-fresh install when config has been persisted', async () => {
+    const result = await detectClis({
       configPersisted: true, hasApiKey: false, hasCustomSetup: false,
     });
     expect(result.freshInstall.noConfigPersisted).toBe(false);
   });
 
-  it('detects non-fresh install when api key is set', () => {
-    const result = detectClis({
+  it('detects non-fresh install when api key is set', async () => {
+    const result = await detectClis({
       configPersisted: true, hasApiKey: true, hasCustomSetup: false,
     });
     expect(result.freshInstall.noApiKey).toBe(false);
@@ -78,7 +85,7 @@ describe('cli detection integration via API', () => {
     expect(res.status).toBe(200);
     const body = await res.json() as { tools: unknown[]; summary: { allInstalled: boolean; allFunctional: boolean } };
     expect(Array.isArray(body.tools)).toBe(true);
-    expect(body.tools.length).toBe(6);
+    expect(body.tools.length).toBe(9);
     expect(body.tools[0]).toHaveProperty('name');
     expect(body.tools[0]).toHaveProperty('installed');
     expect(body.tools[0]).toHaveProperty('functional');

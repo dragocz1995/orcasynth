@@ -3,6 +3,9 @@ import type { ResumeProvider } from './types.js';
 import { claudeResume } from './claude.js';
 import { codexResume } from './codex.js';
 import { opencodeResume } from './opencode.js';
+import { kiloResume } from './kilo.js';
+import { piResume } from './pi.js';
+import { ompResume } from './omp.js';
 
 /** A resume pending for the next spawn of a task: which program's session, and its id. Parsed from
  *  the task's `resume:` label; the spawn applies it only if the program still matches and the
@@ -15,6 +18,9 @@ const RESUME_PROVIDERS: Readonly<Record<Program, ResumeProvider>> = {
   'claude-code': claudeResume,
   'codex': codexResume,
   'opencode': opencodeResume,
+  'kilo': kiloResume,
+  'pi': piResume,
+  'omp': ompResume,
 };
 
 /** The resume strategy for a program id ('opencode…' variants normalize to 'opencode'), or undefined. */

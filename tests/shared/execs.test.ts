@@ -15,6 +15,21 @@ describe('shared/execs', () => {
     }
   });
 
+  it('registers the new agent CLI prefixes and bins (kilo/pi/omp)', () => {
+    expect(PROGRAM_PREFIXES['kilo:']).toBe('kilo');
+    expect(PROGRAM_PREFIXES['pi:']).toBe('pi');
+    expect(PROGRAM_PREFIXES['omp:']).toBe('omp');
+    expect(DEFAULT_BINS['kilo']).toBe('kilo');
+    expect(DEFAULT_BINS['pi']).toBe('pi');
+    expect(DEFAULT_BINS['omp']).toBe('omp');
+  });
+
+  it('treats prefixed new-CLI execs as well-formed (so they pass the allow-list guard)', () => {
+    expect(isWellFormedExec('kilo:anthropic/claude-sonnet-4-5')).toBe(true);
+    expect(isWellFormedExec('pi:sonnet')).toBe(true);
+    expect(isWellFormedExec('omp:opus')).toBe(true);
+  });
+
   it('KNOWN_EXECS is the built-in allow-list', () => {
     expect(KNOWN_EXECS).toContain('sonnet');
     expect(KNOWN_EXECS).toContain('opus');

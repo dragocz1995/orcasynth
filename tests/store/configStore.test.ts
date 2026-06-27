@@ -142,6 +142,17 @@ describe('ConfigStore', () => {
     const c = cfg.update({ providers: { worse: { bin: 1, args: 2 } as unknown as { bin: string; args: string } } });
     expect(c.providers.worse).toBeUndefined();
   });
+  it('ships default provider entries for the new agent CLIs (kilo/pi/omp)', () => {
+    const p = cfg.get().providers;
+    expect(p['kilo']).toEqual({ bin: 'kilo', args: '', skipPermissions: true, resume: true });
+    expect(p['pi']).toEqual({ bin: 'pi', args: '', skipPermissions: true, resume: true });
+    expect(p['omp']).toEqual({ bin: 'omp', args: '', skipPermissions: true, resume: true });
+  });
+  it('accepts a well-formed new-CLI exec for pilot/overseer (prefix passes the allow-list guard)', () => {
+    const c = cfg.update({ autopilot: { pilotExec: 'kilo:anthropic/claude-sonnet-4-5', overseerExec: 'pi:sonnet' } });
+    expect(c.autopilot.pilotExec).toBe('kilo:anthropic/claude-sonnet-4-5');
+    expect(c.autopilot.overseerExec).toBe('pi:sonnet');
+  });
   it('round-trips the per-provider skipPermissions toggle and defaults it on', () => {
     // Default providers carry skipPermissions: true out of the box.
     expect(cfg.get().providers['claude-code']?.skipPermissions).toBe(true);

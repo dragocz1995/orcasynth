@@ -132,6 +132,54 @@ describe('buildAgentCommand', () => {
     expect(cmd).not.toContain('1200000 ms'); // reasoning agents bypass the worker preamble
   });
 
+  describe('new agent CLIs', () => {
+    it('routes kilo to the interactive TUI with a --prompt flag and no command-line bypass (7.x)', () => {
+      const cmd = buildAgentCommand({ program: 'kilo', model: 'anthropic/claude-sonnet-4-5' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      expect(cmd).toContain("kilo --model 'anthropic/claude-sonnet-4-5'");
+      expect(cmd).toContain('--prompt '); // 7.x delivers the task via --prompt, not a positional
+      expect(cmd).not.toContain('kilo run'); // interactive TUI, not a one-shot subcommand
+      expect(cmd).not.toContain('--yolo'); // gone in 7.x — auto-approval is config-driven
+      expect(cmd).not.toContain('--nosplash'); // gone in 7.x
+    });
+    it('does not change the kilo command when skipPermissions is toggled off (the toggle is a no-op for kilo 7.x)', () => {
+      const on = buildAgentCommand({ program: 'kilo', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      const off = buildAgentCommand({ program: 'kilo', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', skipPermissions: false });
+      expect(off).toEqual(on);
+    });
+    it('routes pi to the interactive TUI with a positional prompt and no bypass flag (tools run unattended)', () => {
+      const cmd = buildAgentCommand({ program: 'pi', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      expect(cmd).toContain("pi --model 'sonnet'");
+      expect(cmd).not.toContain('--yolo');
+      expect(cmd).not.toContain('--auto-approve');
+    });
+    it('does not change the pi command when skipPermissions is toggled off (the toggle is a no-op for pi)', () => {
+      const on = buildAgentCommand({ program: 'pi', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      const off = buildAgentCommand({ program: 'pi', model: 'sonnet' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', skipPermissions: false });
+      expect(off).toEqual(on);
+    });
+    it('routes omp to the interactive TUI with a positional prompt and the --auto-approve bypass', () => {
+      const cmd = buildAgentCommand({ program: 'omp', model: 'opus' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A' });
+      expect(cmd).toContain("omp --auto-approve --model 'opus'");
+    });
+    it('omits the omp --auto-approve bypass when skipPermissions is off', () => {
+      const cmd = buildAgentCommand({ program: 'omp', model: 'opus' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', skipPermissions: false });
+      expect(cmd).not.toContain('--auto-approve');
+      expect(cmd).toContain("omp --model 'opus'");
+    });
+    it('kilo resumes via --session alongside --model (no bypass flag in 7.x)', () => {
+      const cmd = buildAgentCommand({ program: 'kilo', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'kilo', sessionId: 'k-7' } });
+      expect(cmd).toContain("kilo --session 'k-7' --model 'm'");
+    });
+    it('pi resumes via --session alongside --model', () => {
+      const cmd = buildAgentCommand({ program: 'pi', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'pi', sessionId: 'p-7' } });
+      expect(cmd).toContain("pi --session 'p-7' --model 'm'");
+    });
+    it('omp resumes via --resume alongside --model, after the bypass flag', () => {
+      const cmd = buildAgentCommand({ program: 'omp', model: 'm' }, { projectPath: '/o', taskId: 'orca-1', agentName: 'A', resume: { program: 'omp', sessionId: 'o-7' } });
+      expect(cmd).toContain("--auto-approve --resume 'o-7' --model 'm'");
+    });
+  });
+
   describe('resume', () => {
     it('claude resumes with --resume after the bypass flag, before --model, and a continuation prompt', () => {
       const cmd = buildAgentCommand(

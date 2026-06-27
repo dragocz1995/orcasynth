@@ -16,16 +16,20 @@ export interface SetupAnswers {
 
 /** Autopilot CLIs that can drive missions without an API key, in recommended order. Mirrors the agent
  *  programs the daemon knows about (src/shared/execs.ts). */
-const AUTOPILOT_CLIS = ['claude', 'opencode', 'codex'] as const;
+const AUTOPILOT_CLIS = ['claude', 'opencode', 'codex', 'kilo', 'pi', 'omp'] as const;
 
 /** Default autopilot exec spec for a detected agent CLI — a well-formed `<prefix>:<model>` spec that
  *  resolveExecutor routes to the right program (so it passes the daemon's allow-list guard without
- *  needing a custom model entry). opencode is provider-agnostic, so its model comes from the caller. */
-export function defaultExecForCli(cli: string, opencodeModel = 'anthropic/claude-sonnet-4-5'): string {
+ *  needing a custom model entry). opencode/kilo/pi/omp are provider-agnostic, so their model comes
+ *  from the caller (the same default applies to all of them). */
+export function defaultExecForCli(cli: string, agnosticModel = 'anthropic/claude-sonnet-4-5'): string {
   switch (cli) {
     case 'claude': return 'claude:sonnet';
     case 'codex': return 'codex:gpt-5.5';
-    case 'opencode': return `opencode:${opencodeModel}`;
+    case 'opencode': return `opencode:${agnosticModel}`;
+    case 'kilo': return `kilo:${agnosticModel}`;
+    case 'pi': return `pi:${agnosticModel}`;
+    case 'omp': return `omp:${agnosticModel}`;
     default: return '';
   }
 }

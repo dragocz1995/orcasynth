@@ -3,6 +3,9 @@ import { parseResumeLabel, resumeProviderFor } from '../../../src/spawn/resume/i
 import { claudeResume } from '../../../src/spawn/resume/claude.js';
 import { codexResume } from '../../../src/spawn/resume/codex.js';
 import { opencodeResume } from '../../../src/spawn/resume/opencode.js';
+import { kiloResume } from '../../../src/spawn/resume/kilo.js';
+import { piResume } from '../../../src/spawn/resume/pi.js';
+import { ompResume } from '../../../src/spawn/resume/omp.js';
 
 describe('resume providers', () => {
   it('claude resumes via the --resume flag, alongside --model', () => {
@@ -14,6 +17,15 @@ describe('resume providers', () => {
   it('opencode resumes via the -s session flag', () => {
     expect(opencodeResume.resumeArgs('ses_9')).toEqual({ args: ['-s', 'ses_9'], placement: 'flag' });
   });
+  it('kilo resumes via the --session flag', () => {
+    expect(kiloResume.resumeArgs('k-9')).toEqual({ args: ['--session', 'k-9'], placement: 'flag' });
+  });
+  it('pi resumes via the --session flag', () => {
+    expect(piResume.resumeArgs('p-9')).toEqual({ args: ['--session', 'p-9'], placement: 'flag' });
+  });
+  it('omp resumes via the --resume flag', () => {
+    expect(ompResume.resumeArgs('o-9')).toEqual({ args: ['--resume', 'o-9'], placement: 'flag' });
+  });
 });
 
 describe('resumeProviderFor', () => {
@@ -22,6 +34,9 @@ describe('resumeProviderFor', () => {
     expect(resumeProviderFor('codex')).toBe(codexResume);
     expect(resumeProviderFor('opencode')).toBe(opencodeResume);
     expect(resumeProviderFor('opencode-zen')).toBe(opencodeResume); // 'opencode…' normalizes
+    expect(resumeProviderFor('kilo')).toBe(kiloResume);
+    expect(resumeProviderFor('pi')).toBe(piResume);
+    expect(resumeProviderFor('omp')).toBe(ompResume);
     expect(resumeProviderFor('mystery')).toBeUndefined();
   });
 });

@@ -1428,14 +1428,14 @@ export function createServer(d: ServerDeps): Hono<{ Variables: { user: User; tok
     }
   });
 
-  app.get('/integrations/cli-status', c => {
+  app.get('/integrations/cli-status', async c => {
     const cfg = d.config.get();
     const ctx = {
       configPersisted: d.config.hasSettings(),
       hasApiKey: cfg.autopilot.apiKeySet,
       hasCustomSetup: cfg.customModels.length > 0 || cfg.hiddenPresets.length > 0,
     };
-    return c.json(detectClis(ctx));
+    return c.json(await detectClis(ctx));
   });
 
   // GitHub auth posture for the PR-native workflow — whether a push would succeed (via a stored token

@@ -577,13 +577,17 @@ export default function SettingsPage() {
                           <Input value={cur.args} placeholder={p.argsHint} onChange={(e) => set({ args: e.target.value })} className="font-mono text-xs" />
                         </Field>
                       </div>
-                      <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
-                        <span className="min-w-0">
-                          <span className="block text-xs font-medium text-text">{t.settings.skipPermissions}</span>
-                          <span className="block text-[11px] text-text-muted">{t.settings.skipPermissionsHint}</span>
-                        </span>
-                        <Toggle checked={cur.skipPermissions !== false} onChange={(v) => set({ skipPermissions: v })} label={t.settings.skipPermissions} />
-                      </label>
+                      {p.noBypassFlag ? (
+                        <div className="rounded-md border border-border bg-bg px-3 py-2 text-[11px] text-text-muted">{t.settings.skipPermissionsNoop}</div>
+                      ) : (
+                        <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
+                          <span className="min-w-0">
+                            <span className="block text-xs font-medium text-text">{t.settings.skipPermissions}</span>
+                            <span className="block text-[11px] text-text-muted">{t.settings.skipPermissionsHint}</span>
+                          </span>
+                          <Toggle checked={cur.skipPermissions !== false} onChange={(v) => set({ skipPermissions: v })} label={t.settings.skipPermissions} />
+                        </label>
+                      )}
                       <label className="flex items-center justify-between gap-3 rounded-md border border-border bg-bg px-3 py-2">
                         <span className="min-w-0">
                           <span className="block text-xs font-medium text-text">{t.settings.resumeSessions}</span>

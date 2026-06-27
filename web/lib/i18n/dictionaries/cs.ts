@@ -84,6 +84,9 @@ export const cs = {
     claudeCode: 'Claude Code',
     opencode: 'OpenCode',
     codex: 'Codex',
+    kilo: 'Kilo Code',
+    pi: 'Pi',
+    omp: 'oh-my-pi',
   },
   auth: {
     signIn: 'Přihlásit se',
@@ -580,6 +583,7 @@ export const cs = {
     extraArgs: 'Další parametry',
     skipPermissions: 'Přeskakovat dotazy na oprávnění',
     skipPermissionsHint: 'Agent běží bez interaktivních „Povolit?" dotazů — orca ho spouští bez dozoru v tmuxu, takže by jinak misi zablokoval. Autonomii hlídá overseer nad agentem. Vypněte, jen pokud chcete dotazy ručně.',
+    skipPermissionsNoop: 'Orca u tohoto agenta nemůže přepínat oprávnění odsud — buď spouští vestavěné nástroje bez potvrzování, nebo auto-schvalování nastavíte v jeho vlastní konfiguraci.',
     resumeSessions: 'Navazovat na předchozí relace',
     resumeSessionsHint: 'Při opětovném spuštění (oprava po review, restart po zaseknutí nebo ruční spuštění) agent naváže na svou předchozí CLI relaci — zachová si plný kontext a úkol dotáhne místo startu od nuly. Když odpovídající relace neexistuje, automaticky se spustí čistě. Vypněte, pokud má vždy začínat od nuly.',
     executor: 'Vykonavatel',
