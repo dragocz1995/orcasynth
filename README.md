@@ -10,8 +10,9 @@ before a risky change ever reaches your codebase.
 `Plan · Dispatch · Observe · Intervene`
 
 Orcasynth is a self-hosted daemon that orchestrates autonomous coding agents
-(Claude Code, OpenCode, Codex) in isolated `tmux` sessions — with a REST API, a CLI,
-and a real-time Next.js web UI. No SaaS, no lock-in: your machine, your agents, your code.
+(Claude Code, OpenCode, Codex, Kilo Code, Pi, oh-my-pi) in isolated `tmux` sessions — with
+a REST API, a CLI, and a real-time Next.js web UI. No SaaS, no lock-in: your machine, your
+agents, your code.
 
 [![CI](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml/badge.svg)](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
@@ -34,9 +35,10 @@ trust it more, you turn the autonomy up; when you trust it less, you turn it dow
 
 ## What it does
 
-- **Autopilot planning.** Give the Pilot a goal and an LLM decomposes it into ordered
-  phases, chains them by dependency, and can name an agent per phase. Phases only start
-  once the phases they depend on are done.
+- **Autopilot planning.** Give the Pilot a goal and an LLM decomposes it into a dependency
+  DAG of phases, chains them by dependency, and can name an agent per phase. Phases only
+  start once the phases they depend on are done — and independent phases run in parallel up
+  to your session limit, each in its own isolated worktree, instead of a forced linear chain.
 - **Per-model descriptions & per-phase model selection.** Write a capability description
   for each model in Settings, flip on "Autopilot picks the model," and the planner chooses
   the best-suited model for each phase from those descriptions — validated against your
@@ -54,21 +56,25 @@ trust it more, you turn the autonomy up; when you trust it less, you turn it dow
   and CI-green. Auth uses a configured GitHub token or falls back to the machine's `gh` CLI
   login. Configurable globally in **Settings → GitHub** and overridable per project
   (**Inherit / On / Off**), so each project runs its own workflow.
-- **Agent-agnostic spawning.** Runs Claude Code, OpenCode, or Codex in isolated `tmux`
-  sessions, configurable per task. Each agent receives the task context and closes its own
-  task when it's done.
+- **Agent-agnostic spawning.** Runs Claude Code, OpenCode, Codex, Kilo Code, Pi, or
+  oh-my-pi in isolated `tmux` sessions, configurable per task — as workers *and* as the
+  autopilot's Pilot/Overseer. Each provider is a first-class executor with its own brand
+  icon and launch flags in **Settings → Providers**, and each agent receives the task
+  context and closes its own task when it's done.
 - **Autonomy levels (L0–L3).** Choose how much rope each mission gets — from
   **L0 · Recommend** (plan only, nothing runs until you approve) through **L1 · Assist**
   and **L2 · Pilot** to **L3 · Auto** (full autonomy). The overseer's decision engine
   auto-clears agent permission prompts when confidence is high and the action is safe, and
   escalates anything destructive or uncertain to a human. Operations like `rm -rf`, dropping
   tables, force-pushes, or touching `.env` always escalate, whatever the level.
-- **Live web UI with one-click intervention.** Tasks, a kanban board with a calendar,
-  missions with phase progress, a timeline with an activity feed, an escalations queue for
-  review-gate decisions, and real-time `tmux` session previews you can jump into and take
-  over. Each preview is a real PTY streamed over a WebSocket (xterm), so you type straight
-  into the agent — native cursor, smooth scrolling, full key support — not a read-only
-  mirror. A dedicated **Stats** page shows per-model token/cost breakdown. Creating a
+- **Live web UI with one-click intervention.** Tasks, a kanban board with a calendar (and
+  date-range filtering), missions with phase progress, a timeline with an activity feed and a
+  "changes over time" view that turns recent git history into an interactive commit stream
+  plus a most-active-files roll-up, an escalations queue for review-gate decisions, and
+  real-time `tmux` session previews you can jump into and take over. The Pilot's planning run
+  streams live in the task modal too, expandable into the full session terminal. Each preview
+  is a real PTY streamed over a WebSocket (xterm), so you type straight into the agent —
+  native cursor, smooth scrolling, full key support — not a read-only mirror. A dedicated **Stats** page shows per-model token/cost breakdown. Creating a
   project is point-and-click too: a **Browse** button opens a server-side folder picker to
   choose the path instead of typing it, and you pick a project icon (from an image already
   in the repo) right after creating it. Full EN/CS internationalization built in, and the
@@ -198,7 +204,8 @@ node dist/cli/index.js close <id>  # close a task
    │   Pilot   │ ─────────────────► │   Overseer  │ ─────────► │  Agent (tmux) │
    │ (planner) │                    │ (scheduler, │            │ Claude Code / │
    └───────────┘                    │  decisions) │ ◄───────── │ OpenCode /    │
-                                    └─────────────┘   signals  │ Codex         │
+                                    └─────────────┘   signals  │ Codex / Kilo /│
+                                          │                    │ Pi / oh-my-pi │
                                           │                    └──────────────┘
                                           │ escalate
                                           ▼
