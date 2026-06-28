@@ -23,6 +23,9 @@ export interface TestAppOpts {
   fakePlan?: string;
   /** Autopilot API key; set non-empty to enable the relay planning path. */
   apiKey?: string;
+  /** Stub a mission's isolated worktree dir (mirrors MissionGit.worktreeFor) so launch-path tests can
+   *  assert that a mission phase runs in its worktree rather than the shared project checkout. */
+  worktreeFor?: (missionId: string) => string | null | undefined;
 }
 
 /** Wire a real in-memory daemon app (fake tmux + fake inference) with a bootstrapped admin token.
@@ -58,6 +61,7 @@ export async function makeTestApp(opts: TestAppOpts = {}) {
     project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' },
     clock: new FakeClock(0), config, users, projects,
     planJobs, decisionQueue, pilot,
+    ...(opts.worktreeFor ? { missionGit: { worktreeFor: opts.worktreeFor } as never } : {}),
     makeInference: () => new FakeInference(opts.fakePlan ?? '[{"title":"Phase A","type":"task"}]'),
   });
 

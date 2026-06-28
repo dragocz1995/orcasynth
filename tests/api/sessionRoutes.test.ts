@@ -57,6 +57,19 @@ describe('session control routes', () => {
     expect(await deps.tmux.list()).not.toContain(session);
   });
 
+  it('manually (re)launches a mission phase in its isolated worktree, not the shared checkout', async () => {
+    // A phase whose epic has a PR-native mission worktree must spawn in that worktree — a manual restart
+    // that ran in the main project checkout (/o) would strand the agent's edits outside the mission.
+    const { app, token, deps } = await makeTestApp({ worktreeFor: (mid) => (mid === 'm-epicW' ? '/wt/epicW' : null) });
+    deps.tasks.create({ id: 'epicW', project_id: 1, title: 'E', type: 'epic' });
+    deps.tasks.create({ id: 'phaseW', project_id: 1, title: 'P', type: 'task', parent_id: 'epicW', description: 'work' });
+    const res = await app.request('/sessions', post(token, { taskId: 'phaseW' }));
+    expect(res.status).toBe(201);
+    const session = (await res.json() as { session: string }).session;
+    expect(deps.tmux.commandFor(session)).toContain("cd '/wt/epicW'");
+    expect(deps.tmux.commandFor(session)).not.toContain("cd '/o'");
+  });
+
   it('rejects flag-injection keys with a 400 and sends nothing', async () => {
     const { app, token, deps } = await makeTestApp({});
     const session = await launch(app, token, deps, 'orca-f');

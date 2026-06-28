@@ -1,5 +1,5 @@
 import { resolveExecutor } from '../../overseer/routing.js';
-import { checkoutBusy } from '../../overseer/checkout.js';
+import { checkoutBusy, checkoutOf } from '../../overseer/checkout.js';
 import { parseResumeLabel } from '../../spawn/resume/index.js';
 import { projectHead } from '../../integrations/projectFiles.js';
 import { uniqueName } from '../../daemon/uniqueName.js';
@@ -34,8 +34,12 @@ export function createSessionService(d: ServerDeps, gitLock: KeyedMutex, pathFor
     // agent (a scheduler task or a non-PR mission phase) is already live there — a second writer would
     // corrupt per-task change attribution. Read in_progress FRESH and flip status synchronously right
     // after, so the check-and-claim is atomic against the concurrent scheduler/engine ticks.
-    const cwd = pathFor(projectId);
     const resolver = { projectPath: pathFor, worktreeFor: (mid: string) => d.missionGit?.worktreeFor(mid) };
+    // A task that belongs to a PR-native mission runs in that mission's ISOLATED worktree, not the
+    // shared project checkout. Resolve its real cwd the same way the scheduler/engine do (checkoutOf)
+    // so a manual (re)launch lands in the SAME tree the autopilot used — using pathFor here would
+    // silently run the agent in the main checkout and strand its edits outside the mission.
+    const cwd = checkoutOf(resolver, task);
     if (checkoutBusy(resolver, d.tasks.list({ status: 'in_progress' }), cwd)) return { ok: false, reason: 'busy', message: 'checkout busy' };
     const agentName = uniqueName();
     d.tasks.setAgent(taskId, agentName);     // link task → orca-<agentName> session for run controls
@@ -54,7 +58,7 @@ export function createSessionService(d: ServerDeps, gitLock: KeyedMutex, pathFor
     const resumeNote = d.tasks.get(taskId)?.resume_note ?? undefined;
     let session: string;
     try {
-      ({ session } = await d.spawn.launch({ projectId, projectPath: pathFor(projectId), taskId, agentName, spec, taskTitle: task.title, taskDescription: task.description, resumeNote, epicId: task.parent_id ?? undefined, resume }));
+      ({ session } = await d.spawn.launch({ projectId, projectPath: cwd, taskId, agentName, spec, taskTitle: task.title, taskDescription: task.description, resumeNote, epicId: task.parent_id ?? undefined, resume }));
     } catch (e) {
       // The task was already flipped to in_progress above; a spawn failure (bad cwd, missing tmux,
       // name collision) would otherwise leave it stuck with no live session until the stuck detector

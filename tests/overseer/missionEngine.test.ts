@@ -58,6 +58,16 @@ describe('MissionEngine', () => {
     expect(tasks.get('t1')!.labels.some((l) => l.startsWith('reviewfix:'))).toBe(false); // reset → full budget again
   });
 
+  it('publishes an in_progress task event after a successful spawn so the UI sees it running', async () => {
+    const { tasks, engine, bus } = setup();
+    const events: OrcaEvent[] = []; bus.subscribe((e) => events.push(e));
+    await engine.engage({ epicId: 'epic', autonomy: 'L3', maxSessions: 1 });
+    expect(tasks.get('t1')!.status).toBe('in_progress'); // t1 (no deps) was dispatched
+    // Without the publish the DB flips to in_progress but the web cache never invalidates, so the task
+    // stays hidden as "not running" until some unrelated event refreshes it.
+    expect(events.some((e) => e.type === 'task' && e.taskId === 't1' && e.status === 'in_progress')).toBe(true);
+  });
+
   it('serializes ready phases that share a non-PR checkout, even with max_sessions > 1 (C1)', async () => {
     const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
     const tasks = new TaskStore(db);

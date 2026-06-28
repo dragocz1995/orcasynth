@@ -323,6 +323,10 @@ export class MissionEngine {
         continue;
       }
       running++;
+      // Announce the claim so the web cache invalidates and the task shows as running — the scheduler
+      // and manual launch both publish this; without it an engine-spawned phase sits in_progress in
+      // the DB but never surfaces as live in /tasks until some later event happens to refresh it.
+      this.d.bus.publish({ type: 'task', taskId: task.id, status: 'in_progress' });
     }
 
     // Stall: with nothing running and a blocked child present, the mission can't advance until a
