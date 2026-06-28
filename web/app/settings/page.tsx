@@ -122,7 +122,9 @@ export default function SettingsPage() {
     } finally { setSubmittingPreview(false); }
   };
 
-  // React to the async plan job: render phases on done, surface failures, then clear the job id.
+  // React to the async plan job: render phases on done, surface failures, then clear the job id. Keyed
+  // on the job data + id ALONE so it runs per job-state transition, not when `toast`/the translations/
+  // setters change identity (stable or run-time reads) — listing them would re-fire the toast.
   useEffect(() => {
     const job = previewJob.data;
     if (!job || !previewJobId) return;

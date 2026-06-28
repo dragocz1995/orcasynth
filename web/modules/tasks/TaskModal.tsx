@@ -132,7 +132,10 @@ export function TaskModal({ task, onClose, initialSchedule, initialMode, initial
   const planning = plan.isPending || planJobId !== null;
   const busy = create.isPending || update.isPending || spawn.isPending || setExecM.isPending || planning;
 
-  // React to the async autopilot job: render its phases on done, surface failures, then clear it.
+  // React to the async autopilot job: render its phases on done, surface failures, then clear it. Keyed
+  // on the job data + id ALONE: it must run on each job-state transition, not when `toast`/`engage`/the
+  // translations or setters change identity (those are stable or read at run time) — listing them would
+  // re-fire the toast/result on unrelated re-renders.
   useEffect(() => {
     const job = planJob.data;
     if (!job || !planJobId) return;

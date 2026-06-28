@@ -48,7 +48,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, side = 'left' }: { 
   // On mobile the sidebar is a drawer (always full-width content); on desktop it collapses to a rail.
   const expanded = mobile ? true : !collapsed;
 
-  // Close the mobile drawer after navigating.
+  // Close the mobile drawer after navigating. Keyed on `pathname` ALONE on purpose: `onMobileClose` is
+  // a fresh inline arrow each render, so listing it would fire this on every parent re-render (closing
+  // the drawer spuriously); `mobile` is read at run time. Only a route change should close it.
   useEffect(() => { if (mobile) onMobileClose?.(); }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
