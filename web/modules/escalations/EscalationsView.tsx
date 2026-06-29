@@ -1,15 +1,61 @@
 'use client';
-import { ShieldAlert, ShieldCheck, Rocket, Play, RotateCcw, Link2, Clock } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldAlert, ShieldCheck, Rocket, Play, RotateCcw, Link2, Clock, MessagesSquare } from 'lucide-react';
 import type { Escalation } from '../../lib/escalations';
-import { useEscalations } from '../../lib/queries';
-import { useSetTaskStatus, useResumeMission, useApproveGate } from '../../lib/mutations';
+import type { PendingAsk } from '../../lib/types';
+import { useEscalations, usePendingAsks } from '../../lib/queries';
+import { useSetTaskStatus, useResumeMission, useApproveGate, useReplyAsk } from '../../lib/mutations';
 import { apiErrorMessage } from '../../lib/orcaClient';
 import { formatTaskTime } from '../../lib/format';
 import { ModuleHeader } from '../../components/ui/ModuleHeader';
 import { Button } from '../../components/ui/Button';
+import { Input } from '../../components/ui/Input';
 import { EmptyState } from '../../components/ui/states';
 import { useToast } from '../../components/ui/Toast';
 import { useTranslation } from '../../lib/i18n';
+
+/** One worker question parked on a human: shows the question and a reply box that unblocks the agent
+ *  (POST /tasks/:id/ask/:askId/reply). Distinct from a review escalation — there's no gate to release,
+ *  just a free-text answer the agent is blocking on. */
+function PendingAskCard({ ask }: { ask: PendingAsk }) {
+  const { t, locale } = useTranslation();
+  const reply = useReplyAsk();
+  const { toast } = useToast();
+  const [text, setText] = useState('');
+  const when = ask.since ? formatTaskTime(new Date(ask.since).toISOString(), Date.now(), locale) : { label: '', title: '' };
+  const send = () => {
+    const v = text.trim();
+    if (!v) return;
+    reply.mutate({ taskId: ask.taskId, askId: ask.askId, text: v }, {
+      onSuccess: () => { toast(t.escalations.askReplied); setText(''); },
+      onError: (e) => toast(apiErrorMessage(e) || t.escalations.askReplyError, 'error'),
+    });
+  };
+  return (
+    <article className="flex flex-col gap-3 rounded-lg border border-accent/40 bg-accent/[0.05] p-4" style={{ boxShadow: 'var(--shadow-card)' }}>
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-accent/40 bg-accent/10">
+          <MessagesSquare size={20} className="text-accent" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-sm font-semibold text-text">{t.escalations.askTitle}{ask.title ? ` · ${ask.title}` : ''}</h2>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[11px] text-text-muted">
+            {ask.epicId ? <><Rocket size={11} className="shrink-0" aria-hidden /><span className="truncate">{ask.epicId}</span></> : null}
+            {when.label ? <><span aria-hidden className="opacity-50">·</span><Clock size={11} className="shrink-0" aria-hidden /><span title={when.title}>{when.label}</span></> : null}
+          </div>
+        </div>
+      </div>
+      <div className="rounded-md border border-border bg-elevated p-3">
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-text">{ask.question}</p>
+      </div>
+      <p className="text-xs text-text-muted">{t.escalations.askDesc}</p>
+      <div className="flex items-center gap-2">
+        <Input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }} placeholder={t.escalations.askReplyPlaceholder} className="flex-1" />
+        <Button variant="accent" icon={Play} onClick={send} disabled={!text.trim() || reply.isPending}>{t.escalations.askSend}</Button>
+      </div>
+    </article>
+  );
+}
 
 /** Escalations inbox: every overseer rejection still awaiting a human, with the full rationale (which
  *  used to be crammed into a toast) and the two resolutions — accept the result and let the mission
@@ -17,6 +63,7 @@ import { useTranslation } from '../../lib/i18n';
 export function EscalationsView() {
   const { t, locale } = useTranslation();
   const escalations = useEscalations();
+  const pendingAsks = usePendingAsks().data ?? [];
   const setStatus = useSetTaskStatus();
   const approveGate = useApproveGate();
   const resume = useResumeMission();
@@ -49,12 +96,14 @@ export function EscalationsView() {
 
   return (
     <>
-      <ModuleHeader title={t.escalations.title} count={escalations.length} icon={ShieldAlert} />
+      <ModuleHeader title={t.escalations.title} count={escalations.length + pendingAsks.length} icon={ShieldAlert} />
 
-      {escalations.length === 0 ? (
+      {escalations.length === 0 && pendingAsks.length === 0 ? (
         <EmptyState title={t.escalations.empty} description={t.escalations.emptyDesc} icon={ShieldCheck} />
       ) : (
         <div className="flex flex-col gap-3">
+          {/* Agent questions waiting on a human come first — an agent is actively blocked on each. */}
+          {pendingAsks.map((a) => <PendingAskCard key={a.askId} ask={a} />)}
           {escalations.map((e) => {
             const when = formatTaskTime(e.ts, Date.now(), locale);
             return (

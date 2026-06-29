@@ -5,7 +5,7 @@ import { uiZoom } from '../../lib/uiZoom';
 import Link from 'next/link';
 import { Bell, ShieldAlert } from 'lucide-react';
 import type { Task } from '../../lib/types';
-import { useSessions, useSessionSignals, useTasks, useEscalations } from '../../lib/queries';
+import { useSessions, useSessionSignals, useTasks, useEscalations, usePendingAsks } from '../../lib/queries';
 import { needsInputSessions, taskSessionName } from '../../lib/agentUtils';
 import { taskExec } from '../../lib/agentUtils';
 import { NeedsInputRow } from './NeedsInputRow';
@@ -22,7 +22,8 @@ export function NotificationBell() {
 
   const waiting = needsInputSessions(sessions.data ?? [], signals);
   const escalations = useEscalations();
-  const count = waiting.length + escalations.length;
+  const pendingAsks = usePendingAsks().data ?? [];
+  const count = waiting.length + escalations.length + pendingAsks.length;
 
   const btnRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);

@@ -86,6 +86,8 @@ export function useOrcaEvents(opts?: { onReview?: (e: ReviewEvent) => void }): v
       qc.invalidateQueries({ queryKey: ['activity'] });
       if (data.taskId) qc.invalidateQueries({ queryKey: ['task-activity', data.taskId] });
     };
+    // A worker's `orca ask` was escalated to a human, or just got answered — refresh the Escalations inbox.
+    const askHandler = () => qc.invalidateQueries({ queryKey: ['pending-asks'] });
     // A new commit landed in a running task's checkout — refresh its live git history and any open
     // per-commit file diff so the conversation feed updates live without a reload.
     const changeHandler = (e: MessageEvent) => {
@@ -127,6 +129,7 @@ export function useOrcaEvents(opts?: { onReview?: (e: ReviewEvent) => void }): v
       es.addEventListener('review', reviewHandler);
       es.addEventListener('decision', decisionHandler);
       es.addEventListener('message', messageHandler);
+      es.addEventListener('ask', askHandler);
       es.addEventListener('change', changeHandler);
     };
     connect();

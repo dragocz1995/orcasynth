@@ -15,6 +15,7 @@ function toRow(e: OrcaEvent): { type: string; target: string; detail: string } |
     case 'message': return { type: 'message', target: e.taskId, detail: JSON.stringify({ role: e.role, text: e.text }) };
     case 'signal': return { type: 'signal', target: e.session, detail: e.signal.type };
     case 'change': return null; // transient live-refresh ping (git is its own source of truth) — not persisted
+    case 'ask': return null; // transient pending-ask nudge for the Escalations inbox — not persisted
     case 'plan': return null; // transient job-status ping — not part of the persistent timeline
   }
 }

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Languages, User, ShieldAlert } from 'lucide-react';
 import { modulesByGroup } from '../../modules/registry';
 import { useSidebarState } from '../../lib/useSidebarState';
-import { useHealth, useTasks, useMe, useEscalations } from '../../lib/queries';
+import { useHealth, useTasks, useMe, useEscalations, usePendingAsks } from '../../lib/queries';
 import { useTranslation } from '../../lib/i18n';
 import { NavGroup } from './NavGroup';
 import { OpsStatusBar } from './OpsStatusBar';
@@ -32,6 +32,9 @@ export function Sidebar({ mobileOpen = false, onMobileClose, side = 'left' }: { 
   const status: keyof typeof DAEMON_STATUS = !up ? 'fail' : working ? 'busy' : 'ready';
   const nextReady = (tasks.data ?? []).find((t) => t.status === 'open' && t.type !== 'epic');
   const escalations = useEscalations();
+  // Agent questions parked on a human count as escalations for the badge — an agent is blocked on each.
+  const pendingAsks = usePendingAsks().data ?? [];
+  const escalationCount = escalations.length + pendingAsks.length;
   const dragging = useRef(false);
 
   const { t, locale, setLocale } = useTranslation();
@@ -101,7 +104,7 @@ export function Sidebar({ mobileOpen = false, onMobileClose, side = 'left' }: { 
                   href: m.route,
                   label: t.nav[m.id as keyof typeof t.nav] ?? m.label,
                   icon: m.icon,
-                  badge: m.id === 'escalations' ? escalations.length : undefined,
+                  badge: m.id === 'escalations' ? escalationCount : undefined,
                 })),
               }}
               pathname={pathname}
@@ -113,14 +116,17 @@ export function Sidebar({ mobileOpen = false, onMobileClose, side = 'left' }: { 
 
       {/* Escalations alert — sits above "next ready" so a rejected phase waiting on a human is the
           first thing you see. Warning-toned, shows the count and the latest rejected phase. */}
-      {expanded && escalations.length > 0 && (
-        <Link href="/escalations" className="border-t border-warning/30 bg-warning/[0.06] px-4 py-2.5 transition-colors hover:bg-warning/10" title={escalations[0]!.title}>
-          <div className="flex items-center gap-1.5 text-tiny font-semibold uppercase tracking-wide text-warning">
-            <ShieldAlert size={12} aria-hidden />{t.common.escalationsWaiting.replace('{count}', String(escalations.length))}
-          </div>
-          <div className="mt-0.5 truncate text-xs text-text">{escalations[0]!.title}</div>
-        </Link>
-      )}
+      {expanded && escalationCount > 0 && (() => {
+        const topTitle = escalations[0]?.title ?? pendingAsks[0]?.title ?? t.escalations.askTitle;
+        return (
+          <Link href="/escalations" className="border-t border-warning/30 bg-warning/[0.06] px-4 py-2.5 transition-colors hover:bg-warning/10" title={topTitle}>
+            <div className="flex items-center gap-1.5 text-tiny font-semibold uppercase tracking-wide text-warning">
+              <ShieldAlert size={12} aria-hidden />{t.common.escalationsWaiting.replace('{count}', String(escalationCount))}
+            </div>
+            <div className="mt-0.5 truncate text-xs text-text">{topTitle}</div>
+          </Link>
+        );
+      })()}
 
       {expanded && nextReady && (
         <Link href="/tasks" className="border-t border-border px-4 py-2.5 transition-colors hover:bg-elevated" title={nextReady.title}>

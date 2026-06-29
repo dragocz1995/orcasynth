@@ -84,6 +84,8 @@ describe('S51 — spawned agent service token is capability-scoped, not admin', 
     expect((await app.request('/tasks/orca-ask/ask/bogus?timeoutMs=1', auth(agentTok))).status).not.toBe(403);
     // the human reply is off-limits to the agent: it must not answer its own question
     expect((await app.request('/tasks/orca-ask/ask/bogus/reply', post(agentTok, { text: 'self-answer' }))).status).toBe(403);
+    // the pending-ask inbox is a human surface — an agent token can't enumerate it
+    expect((await app.request('/asks/pending', auth(agentTok))).status).toBe(403);
   });
 
   it('cannot touch a task in a project it is not actively working in (no admin cross-project bypass)', async () => {

@@ -199,6 +199,15 @@ export function registerTaskRoutes(app: OrcaApp, ctx: RouteContext): void {
     const b = await parseBody(c, askSchema);
     return askService.reply(c.req.param('askId'), b.text) ? c.json({ ok: true }) : c.json({ error: 'ask already answered' }, 409);
   });
+  // Every `orca ask` currently parked on a human (overseer escalated / no overseer), for the Escalations
+  // inbox — enriched with the task title + epic, scoped to the projects the caller may see. Not in the
+  // agent allow-list: this is a human surface, so a worker token never reaches it.
+  app.get('/asks/pending', c => {
+    const items = askService.pending()
+      .map((a) => { const task = d.tasks.get(a.taskId); return task ? { ...a, title: task.title, epicId: task.parent_id, projectId: task.project_id } : null; })
+      .filter((a): a is NonNullable<typeof a> => a !== null && canAccessProject(c, a.projectId));
+    return c.json(items);
+  });
 
   app.get('/tasks/:id/deps', c => c.json(d.tasks.depsFor(c.req.param('id'))));
   app.delete('/tasks/:id', async c => {

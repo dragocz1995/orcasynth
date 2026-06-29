@@ -352,6 +352,12 @@ export const cs = {
     approved: 'Schváleno — mise pokračuje',
     rerunning: 'Fáze se spouští znovu',
     actionError: 'Akce selhala',
+    askTitle: 'Agent se ptá',
+    askDesc: 'Agent položil autopilotovi otevřenou otázku a čeká na vaši odpověď. Dokud neodpovíte, je zablokovaný.',
+    askReplyPlaceholder: 'Napište odpověď pro agenta…',
+    askSend: 'Odeslat odpověď',
+    askReplied: 'Odpověď odeslána — agent pokračuje',
+    askReplyError: 'Odpověď se nepodařilo odeslat (okno už možná vypršelo)',
   },
   agent: {
     working: 'Pracuje',

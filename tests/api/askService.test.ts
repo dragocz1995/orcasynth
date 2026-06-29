@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { DecisionQueue } from '../../src/overseer/decisionQueue.js';
 import { createAskService, ASK_SENTINEL } from '../../src/api/services/askService.js';
 
@@ -11,6 +11,7 @@ function setup(opts: { overseerExec?: string; mission?: boolean } = {}) {
     tasks: { get: (id: string) => (id === 't1' ? { id, parent_id: 'e1' } : undefined) },
     missions: { active: () => (opts.mission === false ? [] : [{ id: 'm-e1', epic_id: 'e1' }]) },
     config: { get: () => ({ autopilot: { overseerExec: opts.overseerExec ?? 'sonnet' } }) },
+    clock: { now: () => 1000 },
     bus: { publish: (e: { type: string; taskId: string; role: string; text: string }) => { if (e.type === 'message') recorded.push(e); } },
     events: { list: (q: { target: string }) => recorded.filter((e) => e.taskId === q.target).map((e) => ({ detail: JSON.stringify({ role: e.role, text: e.text }) })) },
   } as never;
@@ -56,14 +57,15 @@ describe('askService', () => {
     expect(recorded.at(-1)).toMatchObject({ role: 'human', text: 'go with A' });
   });
 
-  it('falls back to the sentinel when no overseer can answer and no human replies in time', async () => {
-    vi.useFakeTimers();
-    const { svc, recorded } = setup({ mission: false }); // no mission ⇒ straight to the human window
-    const { askId } = svc.start('t1', '?');
-    await vi.advanceTimersByTimeAsync(5 * 60_000); // window expires with no reply
-    await expect(svc.poll(askId, 1000)).resolves.toBe(ASK_SENTINEL);
-    expect(recorded.at(-1)).toMatchObject({ role: 'autopilot', text: ASK_SENTINEL });
-    vi.useRealTimers();
+  it('escalates to a human and STAYS pending — never auto-proceeds — when no overseer can answer', async () => {
+    const { svc } = setup({ mission: false }); // no mission ⇒ straight to the human escalation
+    const { askId } = svc.start('t1', 'which one?');
+    await new Promise((r) => setTimeout(r, 0)); // let resolveExchange escalate
+    expect(svc.pending()).toEqual([{ askId, taskId: 't1', question: 'which one?', since: 1000 }]);
+    // it does not settle on its own — only a human reply resolves it, and then it clears
+    expect(svc.reply(askId, 'this one')).toBe(true);
+    await expect(svc.poll(askId, 1000)).resolves.toBe('this one');
+    expect(svc.pending()).toEqual([]);
   });
 
   it('rejects a reply once the exchange is already answered', async () => {

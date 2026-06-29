@@ -83,6 +83,8 @@ export interface UserPrompt {
 // returns only a success flag.
 export type AuthResult = { ok: true };
 export interface ActivityEvent { id: number; ts: string; type: string; target: string; detail: string; project_id: number | null; label: string }
+/** A worker's `orca ask` question parked on a human (overseer escalated / none), shown in the Escalations inbox. */
+export interface PendingAsk { askId: string; taskId: string; question: string; since: number; title: string; epicId: string | null; projectId: number }
 export interface Project { id: number; slug: string; path: string; notes: string; icon: string; pr_enabled: boolean | null }
 interface GitStatus { branch: string; ahead: number; behind: number; dirty: number; clean: boolean }
 interface GitBranch { name: string; current: boolean }

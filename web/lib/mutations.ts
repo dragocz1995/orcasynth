@@ -90,6 +90,13 @@ export function useApproveGate() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (id: string) => orcaClient.approveGate(id), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }) });
 }
+export function useReplyAsk() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { taskId: string; askId: string; text: string }) => orcaClient.replyAsk(v.taskId, v.askId, v.text),
+    onSuccess: (_r, v) => { qc.invalidateQueries({ queryKey: ['pending-asks'] }); qc.invalidateQueries({ queryKey: ['task-activity', v.taskId] }); },
+  });
+}
 export function useSetTaskExec() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (v: { id: string; exec: string }) => orcaClient.setTaskExec(v.id, v.exec), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.tasks }) });

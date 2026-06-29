@@ -352,6 +352,12 @@ export const en = {
     approved: 'Approved — mission continues',
     rerunning: 'Re-running the phase',
     actionError: 'Action failed',
+    askTitle: 'Agent is asking',
+    askDesc: 'An agent asked the autopilot an open question and is waiting for your answer. It stays blocked until you reply.',
+    askReplyPlaceholder: 'Type a reply for the agent…',
+    askSend: 'Send reply',
+    askReplied: 'Reply sent — the agent continues',
+    askReplyError: 'Could not send the reply (the window may have expired)',
   },
   agent: {
     working: 'Working',

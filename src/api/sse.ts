@@ -14,6 +14,9 @@ export type OrcaEvent =
   // A free-text turn in the worker↔autopilot conversation on a task (`orca ask`): the agent's question
   // or the reply (overseer/human/sentinel). Persisted on the task so the detail pane renders the thread.
   | { type: 'message'; taskId: string; role: 'agent' | 'autopilot' | 'human'; text: string }
+  // A transient nudge that a task's pending-ask state changed (escalated to a human, or answered) so the
+  // Escalations inbox refetches. Not persisted — the `message` turns are the durable record.
+  | { type: 'ask'; taskId: string }
   | { type: 'change'; taskId: string }
   | { type: 'plan'; jobId: string; status: PlanJobStatus; epicId?: string; phases?: Phase[]; error?: string };
 

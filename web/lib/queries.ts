@@ -118,6 +118,11 @@ export const useEscalations = (): Escalation[] => {
   );
 };
 
+/** Worker `orca ask` questions parked on a human (overseer escalated / none) — shown in the Escalations
+ *  inbox so a person can answer and unblock the agent. Refreshed live by the SSE `ask` event. */
+export const usePendingAsks = () =>
+  useQuery({ queryKey: ['pending-asks'], queryFn: () => orcaClient.pendingAsks() });
+
 export const useProjects = () =>
   useQuery({ queryKey: ['projects'], queryFn: orcaClient.projects });
 

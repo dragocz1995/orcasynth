@@ -2,10 +2,6 @@ import { randomBytes } from 'node:crypto';
 import type { DecisionQueue } from '../../overseer/decisionQueue.js';
 import type { ServerDeps } from '../deps.js';
 
-/** How long the human gets to answer an agent's question once the overseer has escalated (or there is
- *  no overseer to ask) before the ask falls back to the proceed-anyway sentinel. Bounded so an
- *  unattended autopilot can never hang a worker forever waiting on a human who isn't there. */
-const HUMAN_WINDOW_MS = 5 * 60_000;
 /** One poll's max hold before returning a heartbeat so the worker's CLI re-polls (mirrors the overseer
  *  long-poll heartbeat). Kept under common proxy idle timeouts. */
 const POLL_HEARTBEAT_MS = 25_000;
@@ -25,13 +21,24 @@ type AskRole = 'agent' | 'autopilot' | 'human';
 
 interface Exchange {
   taskId: string;
+  /** The agent's question — surfaced to the human while the window is open. */
+  question: string;
   /** Set once the exchange settles (overseer reply / human reply / sentinel). */
   finalText?: string;
   /** Long-poll waiters parked on `poll`, woken when the exchange settles. */
   pollWaiters: Array<(text: string) => void>;
   /** Resolver for the human window, present only while it is open (post-escalation). */
   humanResolve?: (text: string) => void;
-  humanTimer?: NodeJS.Timeout;
+  /** When the question was escalated to a human (ms epoch), so the inbox can show how long it's waited. */
+  openedAt?: number;
+}
+
+/** A worker question parked on a human, awaiting a reply (no auto-fallback — the agent waits). */
+interface PendingAsk {
+  askId: string;
+  taskId: string;
+  question: string;
+  since: number;
 }
 
 export interface AskServiceDeps {
@@ -49,6 +56,8 @@ export interface AskService {
   reply(askId: string, text: string): boolean;
   /** The task an ask id belongs to (for the route's per-project access gate), or null if unknown. */
   taskFor(askId: string): string | null;
+  /** Every ask currently parked on its human window (escalated / no overseer), for the Escalations inbox. */
+  pending(): PendingAsk[];
 }
 
 /** The free-text worker↔autopilot exchange behind `orca ask`. Bridges the worker's long-poll to the
@@ -61,14 +70,20 @@ export function createAskService({ d, decisionQueue }: AskServiceDeps): AskServi
   function record(taskId: string, role: AskRole, text: string): void {
     d.bus.publish({ type: 'message', taskId, role, text });
   }
+  /** Transient ping so the Escalations inbox refetches its pending-ask list (open ↔ resolved). Not
+   *  persisted — the `message` turns are the durable record; this only nudges the live view. */
+  function pingPending(taskId: string): void {
+    d.bus.publish({ type: 'ask', taskId });
+  }
 
   function finalize(askId: string, role: AskRole, text: string): void {
     const ex = exchanges.get(askId);
     if (!ex || ex.finalText !== undefined) return; // already settled — ignore a late second resolver
-    if (ex.humanTimer) clearTimeout(ex.humanTimer);
+    const wasOpen = !!ex.humanResolve;
     ex.humanResolve = undefined;
     ex.finalText = text;
     record(ex.taskId, role, text);
+    if (wasOpen) pingPending(ex.taskId); // a parked ask just cleared — drop it from the inbox
     for (const w of ex.pollWaiters.splice(0)) w(text);
     // Evict after a grace window: late re-polls and the access gate still resolve, then it's GC'd so
     // a long-lived daemon doesn't accumulate settled exchanges forever.
@@ -76,15 +91,16 @@ export function createAskService({ d, decisionQueue }: AskServiceDeps): AskServi
     if (typeof evict.unref === 'function') evict.unref();
   }
 
-  /** Open the bounded human window: wait for a human reply, else settle with the sentinel. Used when the
-   *  overseer escalates/times out, or there is no overseer to ask at all. */
-  function openHumanWindow(askId: string): void {
+  /** Hand the question to a human and WAIT — no auto-proceed. Used when the overseer escalates/times out,
+   *  or there is no overseer at all. The ask now stands as a pending escalation in the inbox until a human
+   *  answers it (or the worker's own tool timeout kills its blocking call). This mirrors every other Orca
+   *  escalation: the autopilot stops and waits for a person rather than guessing on the agent's behalf. */
+  function escalateToHuman(askId: string): void {
     const ex = exchanges.get(askId);
     if (!ex || ex.finalText !== undefined) return;
     ex.humanResolve = (text) => finalize(askId, 'human', text);
-    const timer = setTimeout(() => finalize(askId, 'autopilot', ASK_SENTINEL), HUMAN_WINDOW_MS);
-    if (typeof timer.unref === 'function') timer.unref();
-    ex.humanTimer = timer;
+    ex.openedAt = d.clock.now();
+    pingPending(ex.taskId); // surface it on the Escalations inbox
   }
 
   /** The task's conversation so far (every `message` turn, oldest-first) so the overseer answers with
@@ -98,8 +114,8 @@ export function createAskService({ d, decisionQueue }: AskServiceDeps): AskServi
   }
 
   async function resolveExchange(askId: string, taskId: string, question: string): Promise<void> {
-    // Only an ACTIVE mission with a parked overseer can answer; otherwise skip straight to the human
-    // window (waiting out the decision timeout for an overseer that will never poll is pointless).
+    // Only an ACTIVE mission with a parked overseer can answer; otherwise escalate straight to a human
+    // (waiting out the decision timeout for an overseer that will never poll is pointless).
     const task = d.tasks.get(taskId);
     const mission = task?.parent_id ? d.missions.active().find((m) => m.epic_id === task.parent_id) : undefined;
     const overseerParked = !!mission && !!d.config.get().autopilot.overseerExec;
@@ -111,22 +127,22 @@ export function createAskService({ d, decisionQueue }: AskServiceDeps): AskServi
       if (reply) { finalize(askId, 'autopilot', reply); return; }
       // No reply ⇒ the overseer escalated or timed out → hand it to a human.
     }
-    openHumanWindow(askId);
+    escalateToHuman(askId);
   }
 
   function start(taskId: string, question: string): { askId: string } {
     const askId = randomBytes(6).toString('hex');
-    exchanges.set(askId, { taskId, pollWaiters: [] });
+    exchanges.set(askId, { taskId, question, pollWaiters: [] });
     record(taskId, 'agent', question);
     // Fire-and-forget: the worker polls for the result. enqueue always settles, but guard anyway so a
-    // thrown resolver can't strand the exchange with no answer.
-    void resolveExchange(askId, taskId, question).catch(() => finalize(askId, 'autopilot', ASK_SENTINEL));
+    // thrown resolver doesn't strand the exchange — fall back to a human escalation, never an auto-answer.
+    void resolveExchange(askId, taskId, question).catch(() => escalateToHuman(askId));
     return { askId };
   }
 
   function poll(askId: string, timeoutMs = POLL_HEARTBEAT_MS): Promise<string | null> {
     const ex = exchanges.get(askId);
-    if (!ex) return Promise.resolve(ASK_SENTINEL); // unknown/expired id — unblock the worker, don't hang
+    if (!ex) return Promise.resolve(ASK_SENTINEL); // unknown/expired id (e.g. daemon restart) — unblock the worker, don't hang
     if (ex.finalText !== undefined) return Promise.resolve(ex.finalText);
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -150,5 +166,15 @@ export function createAskService({ d, decisionQueue }: AskServiceDeps): AskServi
     return exchanges.get(askId)?.taskId ?? null;
   }
 
-  return { start, poll, reply, taskFor };
+  function pending(): PendingAsk[] {
+    const out: PendingAsk[] = [];
+    for (const [askId, ex] of exchanges) {
+      if (ex.finalText === undefined && ex.humanResolve) {
+        out.push({ askId, taskId: ex.taskId, question: ex.question, since: ex.openedAt ?? 0 });
+      }
+    }
+    return out;
+  }
+
+  return { start, poll, reply, taskFor, pending };
 }

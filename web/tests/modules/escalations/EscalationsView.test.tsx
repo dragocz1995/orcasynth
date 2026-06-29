@@ -9,12 +9,15 @@ import { createWrapper } from '../../test-utils';
 
 let patched: { id: string; body: unknown }[] = [];
 let approvedGates: string[] = [];
+let asksReplied: { taskId: string; askId: string; text: string }[] = [];
 const server = setupServer(
   http.patch('*/api/tasks/:id', async ({ params, request }) => { patched.push({ id: String(params.id), body: await request.json() }); return HttpResponse.json({ ok: true }); }),
   http.post('*/api/tasks/:id/approve-gate', ({ params }) => { approvedGates.push(String(params.id)); return HttpResponse.json({ released: ['p2'] }); }),
   http.patch('*/api/missions/:id', () => HttpResponse.json({ ok: true })),
+  http.get('*/api/asks/pending', () => HttpResponse.json([])),
+  http.post('*/api/tasks/:taskId/ask/:askId/reply', async ({ params, request }) => { asksReplied.push({ taskId: String(params.taskId), askId: String(params.askId), text: (await request.json() as { text: string }).text }); return HttpResponse.json({ ok: true }); }),
 );
-beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => { server.resetHandlers(); patched = []; approvedGates = []; }); afterAll(() => server.close());
+beforeAll(() => server.listen({ onUnhandledRequest })); afterEach(() => { server.resetHandlers(); patched = []; approvedGates = []; asksReplied = []; }); afterAll(() => server.close());
 
 function seed(client: ReturnType<typeof createWrapper>['client']) {
   client.setQueryData(['activity', 'review'], [
@@ -25,6 +28,7 @@ function seed(client: ReturnType<typeof createWrapper>['client']) {
     { id: 'p2', title: 'Fix auth', status: 'blocked', parent_id: 'epic1' },
   ]);
   client.setQueryData(['tasks', 'deps'], [{ task_id: 'p2', depends_on_id: 'p1' }]);
+  client.setQueryData(['pending-asks'], []);
 }
 
 describe('EscalationsView', () => {
@@ -54,6 +58,22 @@ describe('EscalationsView', () => {
     // PATCHing dependents to 'open' — so a dependent gated by another predecessor isn't force-started.
     await waitFor(() => expect(approvedGates).toContain('p1'));
     expect(patched.some((p) => p.id === 'p2')).toBe(false);
+  });
+
+  it('renders a parked agent question and sends a human reply that unblocks it', async () => {
+    const { wrapper: Wrapper, client } = createWrapper();
+    client.setQueryData(['activity', 'review'], []);
+    client.setQueryData(['tasks'], []);
+    client.setQueryData(['tasks', 'deps'], []);
+    client.setQueryData(['pending-asks'], [
+      { askId: 'ask1', taskId: 'tA', question: 'Postgres or SQLite?', since: 0, title: 'Wire the store', epicId: 'epicX', projectId: 1 },
+    ]);
+    render(<Wrapper><ToastProvider><EscalationsView /></ToastProvider></Wrapper>);
+    expect(screen.getByText('Postgres or SQLite?')).toBeTruthy();
+    expect(screen.getByText('Agent is asking · Wire the store')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('Type a reply for the agent…'), { target: { value: 'SQLite' } });
+    fireEvent.click(screen.getByText('Send reply'));
+    await waitFor(() => expect(asksReplied).toEqual([{ taskId: 'tA', askId: 'ask1', text: 'SQLite' }]));
   });
 
   it('renders an empty state when nothing is escalated', () => {
