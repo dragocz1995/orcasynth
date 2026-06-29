@@ -199,7 +199,6 @@ describe('makeOrcaTools', () => {
     if (toolName === 'orca_session_send_keys') args.keys = ['x'];
     if (toolName === 'orca_session_spawn') args.taskId = 'x';
     if (toolName === 'orca_mission_engage') { args.epicId = 'x'; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await expect((tools as any)[toolName](args)).rejects.toThrow(/500/);
   });
 });
