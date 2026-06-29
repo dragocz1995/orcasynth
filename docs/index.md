@@ -2,15 +2,33 @@
 
 [![CI](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml/badge.svg)](https://github.com/dragocz1995/orcasynth/actions/workflows/ci.yml)
 
+## Website docs (`docs/site/`)
+
+The [`docs/site/`](site) directory is the **single source of truth for the project website** —
+one file per section, with YAML frontmatter, rendered automatically under `/docs/<slug>`. These
+are the canonical, web-facing docs:
+
+| Section | File |
+|---|---|
+| Overview | [`site/01-overview.md`](site/01-overview.md) |
+| Install | [`site/02-install.md`](site/02-install.md) |
+| Using Orca | [`site/03-using-orca.md`](site/03-using-orca.md) |
+| Concepts | [`site/04-concepts.md`](site/04-concepts.md) |
+| CLI | [`site/05-cli.md`](site/05-cli.md) |
+| Architecture | [`site/06-architecture.md`](site/06-architecture.md) |
+
+Add or remove a section by adding or removing a file here — the website lists the directory and
+renders each file, no website change needed.
+
 ## Quick links
 
 | Document | Contents |
 |---|---|---|
 | [README.md](../README.md) | Top-level project overview, quick start, tech stack |
 | [API.md](API.md) | Full REST API reference with request/response examples and status codes |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System architecture, module descriptions, data flow, timer loops, VAPID keypair, PushDispatcher, UsageRecorder, access control |
-| [CLI.md](CLI.md) | CLI commands (ls, ready, sessions, close, api, plan submit, overseer poll/decide, lifecycle: up/down/status/update/install) |
-| [CONCEPTS.md](CONCEPTS.md) | Domain model: tasks, missions, autonomy levels, overseer, deriver, agent routing, event bus, assistant, push notifications, usage observability, PR workflow |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | → moved to [`site/06-architecture.md`](site/06-architecture.md) (system architecture, modules, data flow, timer loops, access control) |
+| [CLI.md](CLI.md) | → moved to [`site/05-cli.md`](site/05-cli.md) (ls, ready, sessions, close, api, plan submit, overseer, lifecycle commands) |
+| [CONCEPTS.md](CONCEPTS.md) | → moved to [`site/04-concepts.md`](site/04-concepts.md) (tasks, missions, autonomy, overseer, deriver, routing, event bus, assistant, push, PR workflow) |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Setup, npm scripts, conventions, project structure, configuration, adding endpoints |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Production deployment: env block, systemd, Docker, nginx, web frontend, troubleshooting |
 | [GUIDES.md](GUIDES.md) | Advanced patterns: task↔session binding, goal decomposition, overseer gate, deriver prompt detection, scheduled tasks, stuck detector, post-done review, async planning jobs, event store, executor routing |
