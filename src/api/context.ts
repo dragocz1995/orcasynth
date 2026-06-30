@@ -6,6 +6,7 @@ import { createReviewService, type ReviewService } from './services/reviewServic
 import { createSessionService, type SessionService } from './services/sessionService.js';
 import { createAskService, type AskService } from './services/askService.js';
 import { createGuideService, type GuideService } from './services/guideService.js';
+import { createSkillService, type SkillService } from './services/skillService.js';
 import { KeyedMutex } from '../shared/keyedMutex.js';
 import { PlanJobStore, type PlanJob } from '../overseer/planJob.js';
 import { DecisionQueue } from '../overseer/decisionQueue.js';
@@ -85,6 +86,8 @@ export interface RouteContext {
   askService: AskService;
   /** Renders the context-aware control guide an agent fetches with `orca help` (GET /tasks/:id/guide). */
   guideService: GuideService;
+  /** Installs/verifies the `orca-workflow` skill across the agent providers (System panel + startup). */
+  skillService: SkillService;
 }
 
 /** Build the shared {@link RouteContext} from the daemon's injected {@link ServerDeps}. Core reasoning
@@ -266,11 +269,15 @@ export function createRouteContext(d: ServerDeps): RouteContext {
   // (standalone vs mission phase), so the worker preamble can stay short and not duplicate the tutorial.
   const guideService = createGuideService(d);
 
+  // Installs/verifies the `orca-workflow` skill into the agent providers' skills dirs. Stateless (resolves
+  // the spawning user's HOME itself), so it needs no deps from `d`. Injectable for tests (no real FS writes).
+  const skillService = d.skillService ?? createSkillService();
+
   return {
     d, log, planJobs, decisionQueue, tickets, gitLock,
     agentProjects, canAccessProject, notAdmin, accessibleProjects, missionAccessible,
     taskForSession, eventDeps, sessionAccessible, execAllowedForUser,
     pathFor, usagePathFor, checkoutPathFor, resolveTarget,
-    persistPlan, reapPilotSession, finalizePlanJob, releaseGatedDependents, reviewService, sessionService, askService, guideService,
+    persistPlan, reapPilotSession, finalizePlanJob, releaseGatedDependents, reviewService, sessionService, askService, guideService, skillService,
   };
 }

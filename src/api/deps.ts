@@ -23,6 +23,7 @@ import type { UserProjectStore } from '../store/userProjectStore.js';
 import type { PushSubscriptionStore } from '../store/pushSubscriptionStore.js';
 import type { UserPromptStore } from '../store/userPromptStore.js';
 import type { PromptService } from '../prompts/promptService.js';
+import type { SkillService } from './services/skillService.js';
 import type { TaskUsageStore } from '../store/taskUsageStore.js';
 import type { GitReader } from '../git/gitReader.js';
 
@@ -85,4 +86,7 @@ export interface ServerDeps {
   latestVersion?: () => Promise<string | null>;
   /** Start a manual in-place update (detached). Injected in tests; defaults to spawning `orca update`. */
   startUpdate?: () => void;
+  /** Agent-skill install/verify for the System panel. Injected in tests; defaults to a service that
+   *  writes into the spawning user's real provider skills dirs. */
+  skillService?: SkillService;
 }

@@ -22,6 +22,7 @@ import { Deriver } from '../deriver/deriver.js';
 import { EventBus } from '../api/sse.js';
 import { eventProjectId, type EventProjectDeps } from '../api/eventProject.js';
 import { createServer } from '../api/server.js';
+import { createSkillService } from '../api/services/skillService.js';
 import { createTicketStore } from '../terminal/ticketStore.js';
 import { RealTmuxDriver } from '../tmux/driver.js';
 import { SystemClock } from '../shared/clock.js';
@@ -351,6 +352,14 @@ export function buildApp(opts: BuildOpts) {
     // zombies un-reverted — that would stall every mission until the next restart.
     void reconcileZombies().catch((e) => log.error('reconcileZombies failed', e));
     void reconcileOverseers().catch((e) => log.error('reconcileOverseers failed', e)); // re-park overseers for active missions / kill orphans
+    // Self-heal the agent-workflow skill: (re)install the bundled `orca-workflow` SKILL.md into every
+    // present provider on boot. Best-effort — installAll catches its own per-provider errors and never
+    // throws, so this can't block or crash startup. Covers `orca install` (first boot) and `orca update`
+    // (restart) with one code path, always as the spawning user. Skipped under the in-memory test DB.
+    if (opts.dbPath !== ':memory:') {
+      const done = createSkillService().installAll().filter((r) => r.installed).map((r) => r.provider);
+      if (done.length) log.info(`installed orca-workflow skill for: ${done.join(', ')}`);
+    }
     const stopDeriver = deriver.start();
     const stopOverseer = clock.setInterval(() => { for (const m of missions.live()) void engine.tick(m.id); }, 90000);
     const stopScheduler = clock.setInterval(() => { void scheduler.tick(); }, 30000);

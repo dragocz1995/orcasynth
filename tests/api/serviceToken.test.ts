@@ -67,6 +67,9 @@ describe('S51 — spawned agent service token is capability-scoped, not admin', 
     expect((await app.request('/projects/2', { method: 'DELETE', ...auth(agentTok) })).status).toBe(403);
     // arbitrary project data the agent isn't working in
     expect((await app.request('/projects/2/files', auth(agentTok))).status).toBe(403);
+    // the System surface (incl. agent-skill install) is admin-only and never in the agent allow-list
+    expect((await app.request('/system/skills', auth(agentTok))).status).toBe(403);
+    expect((await app.request('/system/skills/install', post(agentTok, {}))).status).toBe(403);
   });
 
   it('lets plan submit + overseer poll/decide through for the agent scope', async () => {

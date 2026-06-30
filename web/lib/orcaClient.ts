@@ -1,4 +1,4 @@
-import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanSubmitResult, PlanJob, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, ProfilePatch, UserPrompt, AuthResult, ActivityEvent, PendingAsk, Project, ProjectGit, CommitLogEntry, Note, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, GithubAuthStatus, TokenUsage, ModelUsage, ResetUsageResult, FileNode, DirListing, SessionInfo, SystemInfo } from './types';
+import type { Task, Mission, CreateTaskInput, UpdateTaskInput, PlanInput, PlanSubmitResult, PlanJob, InsertPhasesInput, InsertPhasesResult, EngageInput, OrcaConfig, ConfigPatch, MissionDetail, User, UserPatch, ProfilePatch, UserPrompt, AuthResult, ActivityEvent, PendingAsk, Project, ProjectGit, CommitLogEntry, Note, HermesStatus, HermesInstallInput, HermesInstallResult, CliDetectionResult, GithubAuthStatus, TokenUsage, ModelUsage, ResetUsageResult, FileNode, DirListing, SessionInfo, SystemInfo, SkillsInfo, SkillInstallResult } from './types';
 import { clearToken } from './token';
 
 // Same-origin BFF base: the browser talks only to this web origin's /api proxy, which injects the
@@ -114,6 +114,8 @@ export const orcaClient = {
   updateConfig: (patch: ConfigPatch) => req<OrcaConfig>('/config', json(patch, 'PUT')),
   system: () => req<SystemInfo>('/system'),
   systemUpdate: () => req<{ started: boolean }>('/system/update', json({})),
+  systemSkills: () => req<SkillsInfo>('/system/skills'),
+  installSkills: () => req<SkillInstallResult>('/system/skills/install', json({})),
   login: (username: string, password: string) => req<AuthResult>('/auth/login', json({ username, password })),
   logout: () => req<{ ok: boolean }>('/auth/logout', { method: 'POST' }),
   me: () => req<{ user: User }>('/auth/me'),

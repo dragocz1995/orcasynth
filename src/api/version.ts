@@ -1,9 +1,12 @@
 import { spawn } from 'node:child_process';
-import { readPkgVersion } from '../shared/pkgVersion.js';
+import { readPkgVersion, readPkgInstalledAt } from '../shared/pkgVersion.js';
 import { fetchLatestVersion } from '../shared/registry.js';
 
 /** This package's version, read once from its package.json. Surfaced on /health so the web UI can show it. */
 export const ORCA_VERSION = readPkgVersion(import.meta.url);
+
+/** When this build was last installed (package.json mtime, ISO) — surfaced on /system as "last updated". */
+export const ORCA_INSTALLED_AT = readPkgInstalledAt(import.meta.url);
 
 /** Port the daemon listens on — the MCP route reaches back into this same daemon's REST API at it. */
 export const ORCA_PORT = Number(process.env.ORCA_PORT ?? 4400);

@@ -153,6 +153,23 @@ export interface SystemInfo {
   latest: string | null;
   updateAvailable: boolean;
   autoUpdate: boolean;
+  /** When this build was last installed (package.json mtime, ISO); null if unreadable. */
+  lastUpdatedAt: string | null;
+}
+
+/** Per-provider install/version status of the `orca-workflow` agent skill (Settings → System). */
+export interface SkillStatus {
+  provider: string;
+  present: boolean;
+  installed: boolean;
+  version: number | null;
+  upToDate: boolean;
+}
+export interface SkillsInfo {
+  skills: SkillStatus[];
+}
+export interface SkillInstallResult {
+  results: Array<{ provider: string; installed: boolean; skipped: boolean; error?: string }>;
 }
 
 /** Token/cost usage for a task's agent run, read from the executor CLI's local session storage. */

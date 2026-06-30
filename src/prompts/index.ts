@@ -22,6 +22,13 @@ function resolvePromptsDir(): string {
 const promptsDir = resolvePromptsDir();
 const cache = new Map<string, string>();
 
+/** Absolute path to a file under the resolved prompts dir (works in dist + src). Single source for
+ *  locating bundled prompt assets — e.g. the `skills/orca-workflow/SKILL.md` master the skillService
+ *  installs — so callers don't re-implement the dist/src probe. */
+export function promptsPath(...segments: string[]): string {
+  return join(promptsDir, ...segments);
+}
+
 /** Read a prompt template by name (without the `.md` suffix), trimmed and cached. */
 function readTemplate(name: string): string {
   const cached = cache.get(name);

@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming';
 import { isNewer } from '../../cli/version.js';
 import { handleMcpRequest } from '../../mcp/server.js';
 import { eventProjectId } from '../eventProject.js';
-import { ORCA_VERSION, ORCA_PORT, defaultLatestVersion, defaultStartUpdate } from '../version.js';
+import { ORCA_VERSION, ORCA_INSTALLED_AT, ORCA_PORT, defaultLatestVersion, defaultStartUpdate } from '../version.js';
 import { parseBody } from '../validation.js';
 import { pushSubscribeSchema, pushUnsubscribeSchema } from '../schemas/config.js';
 import type { OrcaEvent } from '../sse.js';
@@ -12,7 +12,7 @@ import type { OrcaApp, RouteContext } from '../context.js';
  *  config read/write (admin-gated write), the System panel (version/update-available) and the live
  *  SSE event stream (per-subscriber tenancy gate). */
 export function registerConfigRoutes(app: OrcaApp, ctx: RouteContext): void {
-  const { d, accessibleProjects, eventDeps } = ctx;
+  const { d, accessibleProjects, eventDeps, skillService } = ctx;
   // MCP endpoint: the advisor agent connects here to control Orca with native tools. Each request is
   // handled statelessly with the toolset bound to the caller's token, and every tool delegates to the
   // same `callOrcaApi` core as the `orca api` CLI verb — so a new REST endpoint needs zero edits here.
@@ -59,7 +59,20 @@ export function registerConfigRoutes(app: OrcaApp, ctx: RouteContext): void {
       latest,
       updateAvailable: latest ? isNewer(latest, ORCA_VERSION) : false,
       autoUpdate: d.config.get().autoUpdate,
+      lastUpdatedAt: ORCA_INSTALLED_AT,
     });
+  });
+
+  // Agent-workflow skill status + manual (re)install across the installed providers. Admin-only (mirrors
+  // /system/update); the daemon also self-installs on startup, so this is the on-demand re-apply + verify.
+  // No mission gate — writing a skill file doesn't disturb running agents (they read it at their next start).
+  app.get('/system/skills', (c) => {
+    if (d.users && d.users.count() > 0) { const u = c.get('user'); if (!u || !d.users.isAdmin(u.id)) return c.json({ error: 'forbidden' }, 403); }
+    return c.json({ skills: skillService.status() });
+  });
+  app.post('/system/skills/install', (c) => {
+    if (d.users && d.users.count() > 0) { const u = c.get('user'); if (!u || !d.users.isAdmin(u.id)) return c.json({ error: 'forbidden' }, 403); }
+    return c.json({ results: skillService.installAll() });
   });
 
   // Trigger a manual in-place update. Admin-only (mirrors /config) and refused while a mission is live

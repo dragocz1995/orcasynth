@@ -142,6 +142,10 @@ export function useSystemUpdate() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: () => orcaClient.systemUpdate(), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.system }) });
 }
+export function useInstallSkills() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => orcaClient.installSkills(), onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.systemSkills }) });
+}
 export function useLogin() {
   return useMutation({ mutationFn: (v: { username: string; password: string }) => orcaClient.login(v.username, v.password) });
 }

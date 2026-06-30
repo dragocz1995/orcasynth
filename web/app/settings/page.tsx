@@ -1,7 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 import { useEffect, useState, useRef } from 'react';
-import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, Trash2, GitPullRequest, GitBranch, TerminalSquare, Github, RefreshCw, Server, type LucideIcon } from 'lucide-react';
+import { Save, Boxes, Bot, SlidersHorizontal, Plus, X, Pencil, Plug, Radio, Cpu, Gauge, Layers, Link2, KeyRound, FileText, Eye, Lock, Trash2, GitPullRequest, GitBranch, TerminalSquare, Github, RefreshCw, Server, Sparkles, type LucideIcon } from 'lucide-react';
 import { PROVIDERS, ProviderLogo, ProviderTag } from '../../modules/settings/providers';
 import { ModelIcon } from '../../components/ui/ModelIcon';
 import { ExecutorPicker } from '../../components/ui/ExecutorPicker';
@@ -9,8 +9,8 @@ import { ModelModal } from '../../modules/settings/ModelModal';
 import { ModelNoteModal } from '../../modules/settings/ModelNoteModal';
 import { GithubStatusBanner } from '../../modules/settings/GithubStatusBanner';
 import { execProvider, execModel, type ProviderId } from '../../lib/modelProvider';
-import { useConfig, useMe, usePlanJob, useSystem } from '../../lib/queries';
-import { useUpdateConfig, useCleanupAll, useSystemUpdate } from '../../lib/mutations';
+import { useConfig, useMe, usePlanJob, useSystem, useSystemSkills } from '../../lib/queries';
+import { useUpdateConfig, useCleanupAll, useSystemUpdate, useInstallSkills } from '../../lib/mutations';
 import { orcaClient, OrcaApiError } from '../../lib/orcaClient';
 import { useHermesForm } from '../../modules/settings/useHermesForm';
 import { allModels, isPresetExec, removeModel, upsertModel } from '../../lib/execPresets';
@@ -68,6 +68,8 @@ export default function SettingsPage() {
   const update = useUpdateConfig();
   const system = useSystem();
   const systemUpdate = useSystemUpdate();
+  const systemSkills = useSystemSkills();
+  const installSkills = useInstallSkills();
   const cleanup = useCleanupAll();
   const me = useMe();
   const { toast } = useToast();
@@ -633,6 +635,11 @@ export default function SettingsPage() {
                       ? <Badge tone="warning">{t.settings.updateAvailable.replace('{v}', system.data.latest ?? '')}</Badge>
                       : system.data?.latest ? <Badge tone="success">{t.settings.upToDate}</Badge> : null}
                   </div>
+                  {system.data?.lastUpdatedAt && (
+                    <span className="text-xs text-text-muted" title={new Date(system.data.lastUpdatedAt).toLocaleString()}>
+                      {t.settings.lastUpdated.replace('{date}', new Date(system.data.lastUpdatedAt).toLocaleString())}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => systemUpdate.mutate(undefined, {
@@ -694,6 +701,41 @@ export default function SettingsPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Agent skills — install/verify the `orca-workflow` skill across the agent providers.
+                  The daemon self-installs on startup; this is the on-demand re-apply + per-provider status. */}
+              <div className="card-interactive flex w-full max-w-lg flex-col gap-4 rounded-xl border border-border bg-surface p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles size={16} className="text-text-muted" aria-hidden />
+                    <span className="text-sm font-medium text-text">{t.settings.agentSkills}</span>
+                  </div>
+                  <Button
+                    variant="accent"
+                    className="h-8 shrink-0"
+                    disabled={installSkills.isPending || !(systemSkills.data?.skills ?? []).some((s) => s.present && !s.upToDate)}
+                    onClick={() => installSkills.mutate(undefined, {
+                      onSuccess: () => toast(t.settings.skillsInstalled),
+                      onError: (e) => toast(String(e), 'error'),
+                    })}
+                  >
+                    {installSkills.isPending ? t.settings.skillInstalling : t.settings.skillInstall}
+                  </Button>
+                </div>
+                <p className="text-xs text-text-muted">{t.settings.agentSkillsDesc}</p>
+                <div className="flex flex-col gap-3">
+                  {(systemSkills.data?.skills ?? []).map((s) => {
+                    const tone = !s.present ? 'muted' : s.upToDate ? 'success' : s.installed ? 'warning' : 'default';
+                    const label = !s.present ? t.settings.skillProviderAbsent : s.upToDate ? t.settings.skillUpToDate : s.installed ? t.settings.skillOutdated : t.settings.skillMissing;
+                    return (
+                      <div key={s.provider} className="flex items-center justify-between">
+                        <span className="font-mono text-sm text-text">{s.provider}</span>
+                        <Badge tone={tone}>{label}</Badge>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

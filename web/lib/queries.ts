@@ -25,6 +25,7 @@ export const QUERY_KEYS = {
   hermesStatus: ['hermes-status'] as const,
   advisorStatus: ['advisor-status'] as const,
   system: ['system'] as const,
+  systemSkills: ['system-skills'] as const,
   usageByModel: ['usage-by-model'] as const,
 };
 
@@ -98,6 +99,10 @@ export const useConfig = () =>
  *  badge appears without a reload, and so the version flips after a manual/auto update + restart. */
 export const useSystem = () =>
   useQuery({ queryKey: QUERY_KEYS.system, queryFn: orcaClient.system, refetchInterval: 60000 });
+
+/** Per-provider install/version status of the `orca-workflow` agent skill, for the System panel. */
+export const useSystemSkills = () =>
+  useQuery({ queryKey: QUERY_KEYS.systemSkills, queryFn: orcaClient.systemSkills, refetchInterval: 60000 });
 
 export const useUsers = () => useQuery({ queryKey: ['users'], queryFn: orcaClient.listUsers });
 

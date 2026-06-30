@@ -9,7 +9,7 @@ import { createServer } from '../../src/api/server.js';
 import { FakeClock } from '../../src/shared/clock.js';
 import { ConfigStore } from '../../src/store/configStore.js';
 
-function makeApp(over: { latestVersion?: () => Promise<string | null>; startUpdate?: () => void; autoUpdate?: boolean } = {}) {
+function makeApp(over: { latestVersion?: () => Promise<string | null>; startUpdate?: () => void; autoUpdate?: boolean; skillService?: any } = {}) {
   const db = openDb(':memory:'); db.prepare("INSERT INTO projects (id,slug,path) VALUES (1,'orca','/o')").run();
   const config = new ConfigStore(db);
   if (over.autoUpdate) config.update({ autoUpdate: true });
@@ -19,7 +19,7 @@ function makeApp(over: { latestVersion?: () => Promise<string | null>; startUpda
     bus: new EventBus(), engine: null as any, spawn: null as any, tmux: null as any,
     project: { id: 1, path: '/o' }, fallback: { program: 'claude-code', model: 'sonnet' },
     clock: new FakeClock(0), config, projects: new ProjectStore(db), git: null as any,
-    latestVersion: over.latestVersion, startUpdate: over.startUpdate,
+    latestVersion: over.latestVersion, startUpdate: over.startUpdate, skillService: over.skillService,
   });
   return { app, missions };
 }
@@ -47,6 +47,31 @@ describe('GET /system', () => {
   it('surfaces the auto-update opt-in', async () => {
     const { app } = makeApp({ latestVersion: async () => null, autoUpdate: true });
     expect((await (await app.request('/system')).json()).autoUpdate).toBe(true);
+  });
+  it('reports when the build was last installed', async () => {
+    const { app } = makeApp({ latestVersion: async () => null });
+    const body = await (await app.request('/system')).json();
+    expect('lastUpdatedAt' in body).toBe(true); // ISO string from package.json mtime (or null if unreadable)
+  });
+});
+
+describe('/system/skills', () => {
+  const fake = {
+    status: () => [{ provider: 'claude-code', present: true, installed: true, version: 1, upToDate: true }],
+    installAll: () => [{ provider: 'claude-code', installed: true, skipped: false }],
+  };
+  it('returns per-provider status', async () => {
+    const { app } = makeApp({ skillService: fake });
+    const body = await (await app.request('/system/skills')).json();
+    expect(body.skills[0]).toMatchObject({ provider: 'claude-code', upToDate: true });
+  });
+  it('installs on demand and returns the results', async () => {
+    let installed = false;
+    const { app } = makeApp({ skillService: { ...fake, installAll: () => { installed = true; return fake.installAll(); } } });
+    const res = await app.request('/system/skills/install', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).results[0]).toMatchObject({ provider: 'claude-code', installed: true });
+    expect(installed).toBe(true);
   });
 });
 
